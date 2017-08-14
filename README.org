@@ -1,6 +1,14 @@
 #+TITLE: Lisp to cnodejs
 #+AUTHOR: Xt3
 
-* Source
+* 源 Source 
 - 麦子学院: [[http://www.maiziedu.com/course/707/][NodeJS项目实战—仿cnodejs社区论坛]]
 - Youtube: [[https://www.youtube.com/playlist?list=PLO5e_-yXpYLCDnBcSGNavNbhHB6XhSJhL][NodeJS项目实战—仿cnodejs社区论坛]]
+
+* 简介 Introduction
+学习 Web开发 和 CL 的 练习
+
+很多细节 CSS 等 暂不处理 先把个大概弄出来 这就是个学习测试
+
+* 目前
+- 注册登录
