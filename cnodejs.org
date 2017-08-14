@@ -3,9 +3,12 @@
 
 
 * Arc
-- 登录注册
-  - 登录 注册 注销
-- 发表话题
+- 首页 
+  - 登录
+  - 注册
+  - 注销
+- 话题
+  - 创建
 
 * Base
 ** COMMENT Router Template
@@ -61,6 +64,21 @@
 
 * -----
 * Router
+** COMMENT Code Template
+*** GET
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /
+(defroute "/" ()
+  )
+#+END_SRC
+
+*** POST
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; POST /
+(defroute ("/" :method :POST) ()
+  )
+#+END_SRC
+
 ** Base
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; Package
@@ -118,13 +136,19 @@
   (redirect "/"))
 #+END_SRC
 
-** /[logined] -> /
+** ? logined
 #+BEGIN_SRC lisp :tangle src/web.lisp
-;; GET /*
-(defroute ("/(login)|(register)" :regexp t) ()
+;; /login | /register
+(defroute ("/(login)|(register)" :regexp t :method :ANY) ()
   (if (gethash :user *session*)
       (redirect "/")
       (next-route)))
+
+;; /topic /create
+(defroute ("/topic/(create)" :regexp t :method :ANY) ()
+  (if (gethash :user *session*)
+      (next-route)
+      (redirect "/login")))
 #+END_SRC
 
 ** /login
@@ -182,14 +206,50 @@
   (setf (response-status *response*) 422)
   (lisp-render "register" `(:error ,msg)))
 #+END_SRC
+** Topic : /topic
+*** /create
+**** GET
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /topic/create
+(defroute "/topic/create" ()
+  (lisp-render "topic-create" `(:user ,(gethash :user *session*))))
+#+END_SRC
+
+**** POST
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; POST /topic/create
+(defroute ("/topic/create" :method :POST) (&key |title| |content| |tab|)
+  (destructuring-bind (title content tab)
+      (mapcar (lambda (str)
+                (string-trim '(#\Space #\Tab #\Newline #\Return) str))
+              (list |title| |content| |tab|))
+    (let ((uname (gethash :user *session*)))
+      (cond
+        ((some (lambda (s) (string= s ""))
+               (list title content tab))
+         (setf (response-status *response*) 422)
+         (lisp-render "topic-create" '(:error "信息不完整!"
+                                        :user uname)))
+        (t
+         (add-topic uname
+                    tab
+                    title
+                    content
+                    (get-universal-time))
+         (lisp-render "topic-create" '(:success "话题发表成功!"
+                                        :user uname)))))))
+
+#+END_SRC
+
+
 * View
 ** COMMENT Code Template
 #+BEGIN_SRC lisp :tangle templates/.lisp
 (in-package :lisp2cnodejs.view)
-(load "layout")
+(load "shared")
 
-(defparameter *login-html-content* 
-  ``())
+(defun login-html-content ()
+  `())
 
 (defmacro login-page-mac ()
   `(html-template
@@ -202,13 +262,8 @@
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar-brand" (:padding "0px 20px")
-                      (img (:width "120px"
-                                   :height "100%")))
-                     ))))
-        :content ,*login-html-content*
+        `()
+        :content `(,@(login-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
            ,(getf *web-links* :bs-js))))))
@@ -320,7 +375,8 @@
                              (input (:name ,name :type ,type
                                            :id ,id
                                            :class "form-control input-sm"
-                                           :size "20"))))))
+                                           ;; :size "20"
+                                           ))))))
          (div (:class "form-group")
               (div (:class "col-sm-offset-4 col-sm-6")
                    ,@buttons))))
@@ -500,6 +556,106 @@
   (register-page-mac))
 #+END_SRC
 ** ---
+** Topic
+*** Create
+#+BEGIN_SRC lisp :tangle templates/topic-create.lisp
+(in-package :lisp2cnodejs.view)
+(interpol:enable-interpol-syntax)
+(cl-syntax:use-syntax :interpol)  
+
+(load "shared")
+
+(defun create-panel (action board-data)
+  `(form (:action ,action :method "post"
+                  :class "form-horizontal"
+                  :id "topic-create-form")
+         (div (:class "form-group")
+              (span () "选择板块:")
+              (select (:name "tab" :id "tab-value")
+                ,@(loop for i in board-data
+                     and c = 0 then (1+ c)
+                     collect
+                       `(option (:value ,#?"tab${c}") ,i))))
+         
+         (div (:class "form-group")
+              (input (:name "title" :type "text"
+                            :id "title"
+                            :class "form-control input-sm")))
+         (div (:class "form-group")
+              (div (:class "markdown_editor in_editor")
+                   (div (:class "markdown_in_editor")
+                        (textarea (:class "editor"
+                                          :name "content"
+                                          :id ""
+                                          :cols "30"
+                                          :rows "10")))))
+         (div (:class "form-group editor_buttons")
+              ;; (input (:class "span-primary submit-btn"
+              ;;                :type "submit"
+              ;;                :value "提交"))
+              ,(bs-btn `("提交")
+                       :type "submit"
+                       :style "primary"))))
+
+(defun create-main-content ()
+  `(div (:id "content")
+        ,(bs-panel
+          :style "default"
+          :header `((,(bs-breadcrumb
+                       '((("首页") :href "/")
+                         (("发表话题") :class "active")))))
+          :body `((
+                   ;; Error | Success
+                   ,(let ((err (getf *args* :error))
+                          (suc (getf *args* :success)))
+                      (cond
+                        (err `(div (:class "alert alert-danger")
+                                   (strong () ,err)))
+                        (suc `(div (:class "alert alert-success")
+                                   (strong () ,suc)))
+                        (t "")))
+                    ;; Panel
+                    ,(create-panel
+                      "/topic/create"
+                      '("板块0" "板块1")))))))
+
+(defun create-html-content ()
+  `(,(bs-container
+      `(,(bs-row-col
+          `((9 (,(create-main-content)))
+            (3 (,(main-sidebar))))
+          :w '("md")))
+      :fluid t)))
+
+(defmacro topic-create-page-mac ()
+  `(html-template
+    (layout-template)
+    ,(merge-args
+      ,*args*
+      `(:title
+        "发表话题"
+        :links
+        `(,(getf *web-links* :bs-css)
+           ,(getf *web-links* :main-css))
+        :head-rest
+        `((style ()
+                 ,(->css
+                   '((".navbar" (:border-radius "0")
+                      (".navbar-brand" (:padding "0px 20px")
+                       (img (:width "120px"
+                                    :height "100%"))))
+                     (".breadcrumb" (:padding 0
+                                     :margin 0))))))
+        :content `(,@(create-html-content))
+        :scripts
+        `(,(getf *web-links* :jq-js)
+           ,(getf *web-links* :bs-js))))))
+
+(defun topic-create-page ()
+  (topic-create-page-mac))
+  #+END_SRC
+  
+
 * Model
 ** COMMENT PostgreSQL
 #+BEGIN_SRC lisp :tangle src/model.lisp
@@ -575,39 +731,42 @@
   (:use :cl :cl-mongo)
   (:export :find-user
            :add-user
-           :auth-user))
+           :auth-user
+           :add-topic))
 (in-package :lisp2cnodejs.model)
 
 ;; Database
 (db.use "node-club")
 
 ;; Collection
-(defparameter *col* "user") 
+(defparameter *user-col* "user")
+(defparameter *topic-col* "topic") 
 
+;; User
 (defun add-user (uname pwd email)
   "add user record to database."
-  (db.insert *col* ($ ($ "username" uname)
-                      ($ "password" ;; (cl-pass:hash pwd)
-                         pwd)
-                      ($ "email" email))))
+  (db.insert *user-col* ($ ($ "username" uname)
+                           ($ "password" ;; (cl-pass:hash pwd)
+                              pwd)
+                           ($ "email" email))))
 
 (defun find-username (uname)
   "lookup user record by username."
-  (docs (db.find *col* ($ "username" uname))))
+  (docs (db.find *user-col* ($ "username" uname))))
 
 (defun find-email (email)
   "lookup user record by email."
-  (docs (db.find *col* ($ "email" email))))
+  (docs (db.find *user-col* ($ "email" email))))
 
 (defun find-user (uname email)
   "lookup user record by username or email."
   ;; (or (find-username uname)
   ;;     (find-email email))
-  (docs (db.find *col* (kv "$or" (list ($ "username" uname)
+  (docs (db.find *user-col* (kv "$or" (list ($ "username" uname)
                                        ($ "email" email))))))
 
 (defun auth-user (uname pwd)
-  ;; (db.find *col* ($ ($ :username uname)
+  ;; (db.find *user-col* ($ ($ :username uname)
   ;;                   ($ :password pwd)))
   (let ((pwd-hash (first (get-element "password"
                                (find-username uname)))))
@@ -616,4 +775,13 @@
          (string= pwd pwd-hash)
          uname)
         (values nil nil))))
+
+;; Topic
+(defun add-topic (uname tab title content date)
+  "add user record to database."
+  (db.insert *topic-col* ($ ($ "title" title)
+                           ($ "content" content)
+                           ($ "tab" tab)
+                           ($ "username" uname)
+                           ($ "insertTime" date))))
 #+END_SRC

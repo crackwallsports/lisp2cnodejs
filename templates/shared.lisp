@@ -86,7 +86,8 @@
                              (input (:name ,name :type ,type
                                            :id ,id
                                            :class "form-control input-sm"
-                                           :size "20"))))))
+                                           ;; :size "20"
+                                           ))))))
          (div (:class "form-group")
               (div (:class "col-sm-offset-4 col-sm-6")
                    ,@buttons))))

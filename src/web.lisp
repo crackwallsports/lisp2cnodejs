@@ -43,11 +43,17 @@
   (setf (gethash :user *session*) nil)
   (redirect "/"))
 
-;; GET /*
-(defroute ("/(login)|(register)" :regexp t) ()
+;; /login | /register
+(defroute ("/(login)|(register)" :regexp t :method :ANY) ()
   (if (gethash :user *session*)
       (redirect "/")
       (next-route)))
+
+;; /topic /create
+(defroute ("/topic/(create)" :regexp t :method :ANY) ()
+  (if (gethash :user *session*)
+      (next-route)
+      (redirect "/login")))
 
 ;; GET /login
 (defroute "/login" ()
@@ -91,3 +97,29 @@
 (defun register-error (msg)
   (setf (response-status *response*) 422)
   (lisp-render "register" `(:error ,msg)))
+
+;; GET /topic/create
+(defroute "/topic/create" ()
+  (lisp-render "topic-create" `(:user ,(gethash :user *session*))))
+
+;; POST /topic/create
+(defroute ("/topic/create" :method :POST) (&key |title| |content| |tab|)
+  (destructuring-bind (title content tab)
+      (mapcar (lambda (str)
+                (string-trim '(#\Space #\Tab #\Newline #\Return) str))
+              (list |title| |content| |tab|))
+    (let ((uname (gethash :user *session*)))
+      (cond
+        ((some (lambda (s) (string= s ""))
+               (list title content tab))
+         (setf (response-status *response*) 422)
+         (lisp-render "topic-create" '(:error "信息不完整!"
+                                        :user uname)))
+        (t
+         (add-topic uname
+                    tab
+                    title
+                    content
+                    (get-universal-time))
+         (lisp-render "topic-create" '(:success "话题发表成功!"
+                                        :user uname)))))))
