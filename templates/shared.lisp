@@ -1,0 +1,94 @@
+(in-package :lisp2cnodejs.view)
+
+;; Layout
+(defmacro layout-template ()
+  ``(,,(doctype)
+       (html (:lang "en")
+             (head ()
+                   (meta (:charset "utf-8"))
+                   (meta (:name "viewport"
+                                :content "width=device-width, initial-scale=1, shrink-to-fit=no"))
+                   (meta (:name "description" :content "?"))
+                   (meta (:name "author" :content "Xt3"))
+                   (title nil ,title)
+                   ,@links
+                   ,@head-rest)
+             (body ()
+                   ,(header-navbar)
+                   ,@content ,@scripts))))
+
+(defun get-resource (str) 
+  str 
+  "/images/cnodejs_light.svg")
+
+(defparameter *web-links*
+  (list
+   :main-css '(link (:rel "stylesheet" :href "/css/main.css"))
+   :main-js '(script (:src "main.js"))
+   :bs-css '(link (:crossorigin "anonymous"
+                   :rel "stylesheet"
+                   :integrity "sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+                   :href "https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css"))
+   :jq-js '(script (:src "https://code.jquery.com/jquery-3.2.1.js"
+                    :integrity "sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+                    :crossorigin "anonymous"))
+   :bs-js '(script (:crossorigin "anonymous"
+                    :src "https://cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"
+                    :integrity "sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"))
+   :ft-goo '((link (:rel "stylesheet" :type "text/css"
+                    :href "https://fonts.googleapis.com/css?family=Montserrat"))
+             (link (:rel "stylesheet" :type "text/css"
+                        :href "https://fonts.googleapis.com/css?family=Lato")))))
+
+;; Header - Navbar
+(defun search-frame ()
+  '(form (:class "search-form")
+        (div (:class "input-group")
+             ;; ,(bs-glyphicon "search")
+             (span (:class "input-group-addon")
+                   (i (:class "glyphicon glyphicon-search")))
+         (input (:class "form-control" :id "search" :type "text" :name "search")))))
+
+(defun header-navbar ()
+  (bs-navbar
+   `((div (:class "collapse navbar-collapse" :id "myNavbar")
+          ,(bs-nav
+            `(("首页" :href "/")
+              ("新手入门" :href "/getstart")
+              ("API" :href "/api")
+              ("关于" :href "/about")
+              ,@(if (getf *args* :user)
+                    '(("注销" :href "/logout"))
+                    '(("注册" :href "/register")
+                      ("登录" :href "/login"))))
+            :align "right")))
+   :style "inverse"
+   ;; :fixed "top"
+   :brand `(,(bs-nav-collapse "#myNavbar")
+             (a (:class "navbar-brand" :href "/")
+                (img (:src ,(get-resource "site-logo")
+                           :alt "logo"))))))
+
+(defun main-sidebar ()
+  (bs-panel
+   :style "default"
+   :header '((span () "关于"))
+   :body '((span () "这是一个论坛"))))
+
+(defun reg-or-login-panel (action form-data buttons)
+  `(form (:action ,action :method "post" :class "form-horizontal")
+         ,@(loop for i in form-data
+              collect
+                (destructuring-bind (label id type &optional (name id)) i
+                  `(div (:class "form-group")
+                        (label (:class "col-sm-offset-2 col-sm-2 control-label") ,label)
+                        (div (:class "col-sm-5")
+                             (input (:name ,name :type ,type
+                                           :id ,id
+                                           :class "form-control input-sm"
+                                           :size "20"))))))
+         (div (:class "form-group")
+              (div (:class "col-sm-offset-4 col-sm-6")
+                   ,@buttons))))
+
+

@@ -1,0 +1,619 @@
+#+TITLE: cnodejs
+#+AUTHOR: Xt3
+
+
+* Arc
+- 登录注册
+  - 登录 注册 注销
+- 发表话题
+
+* Base
+** COMMENT Router Template
+*** GET
+#+BEGIN_SRC lisp :tangle .lisp
+
+#+END_SRC
+*** POST
+#+BEGIN_SRC lisp :tangle .lisp
+
+#+END_SRC
+* COMMENT Config
+- SQL Required
+- >> src/config.lisp 
+  #+BEGIN_SRC lisp
+(defconfig :common
+    `(:databases ((:maindb :postgres
+                           :database-name "testdb"
+                           :username "me"
+                           :password "123"))))
+  #+END_SRC
+* COMMENT DB
+- SQL Required
+
+#+BEGIN_SRC lisp :tangle src/db.lisp
+(in-package :cl-user)
+(defpackage lisp2cnodejs.db
+  (:use :cl)
+  (:import-from :lisp2cnodejs.config
+                :config)
+  ;; SQL
+  (:import-from :datafly
+                :*connection*)
+  (:import-from :cl-dbi
+                :connect-cached)
+  (:export :connection-settings
+           :db
+           :with-connection))
+(in-package :lisp2cnodejs.db)
+#+END_SRC
+** SQL
+#+BEGIN_SRC lisp :tangle src/db.lisp
+(defun connection-settings (&optional (db :maindb))
+  (cdr (assoc db (config :databases))))
+
+(defun db (&optional (db :maindb))
+  (apply #'connect-cached (connection-settings db)))
+
+(defmacro with-connection (conn &body body)
+  `(let ((*connection* ,conn))
+     ,@body))
+#+END_SRC
+
+* -----
+* Router
+** Base
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; Package
+(in-package :cl-user)
+(defpackage lisp2cnodejs.web
+  (:use :cl
+        :caveman2
+        :lisp2cnodejs.config
+        :lisp2cnodejs.view
+        :lisp2cnodejs.model
+        ;; :lisp2cnodejs.db
+        ;; :datafly
+        ;; :sxql
+        )
+  (:export :*web*))
+(in-package :lisp2cnodejs.web)
+
+;;
+;; Application
+
+(defclass <web> (<app>) ())
+(defvar *web* (make-instance '<web>))
+(clear-routing-rules *web*)
+
+;; 
+;; Routing rules
+
+#+END_SRC
+
+** Error
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; Error pages
+(defmethod on-exception ((app <web>) code)
+  (declare (ignore app))
+  ;; (merge-pathnames #P"_errors/404.html"
+  ;;                *template-directory*)
+  #?"ERROR: ${code}"
+  ;; (lisp-render (error-page code))
+  )
+#+END_SRC
+** /
+*** GET
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /
+(defroute "/" ()
+  (if (gethash :user *session*)
+      (format nil "<h1>欢迎 ~A</h1>" (gethash :user *session*))
+      (format nil "<h1>首页</h1>")))
+#+END_SRC
+** /logout
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /logout
+(defroute "/logout" ()
+  (setf (gethash :user *session*) nil)
+  (redirect "/"))
+#+END_SRC
+
+** /[logined] -> /
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /*
+(defroute ("/(login)|(register)" :regexp t) ()
+  (if (gethash :user *session*)
+      (redirect "/")
+      (next-route)))
+#+END_SRC
+
+** /login
+*** GET
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /login
+(defroute "/login" ()
+  (lisp-render "login" `(:user ,(gethash :user *session*))))
+#+END_SRC
+*** POST
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; POST /login
+(defroute ("/login" :method :POST) (&key |uname| |pwd|)
+  (cond
+    ((some (lambda (s) (string= s ""))
+           (list |uname| |pwd|))
+     (setf (response-status *response*) 422)
+     (lisp-render "login" '(:error "用户名或密码不能为空")))
+    (t (multiple-value-bind (pwdp unamep) (auth-user |uname| |pwd|)
+         (cond
+           (pwdp (setf (gethash :user *session*) |uname|)
+                 (lisp-render "login" '(:success "登录成功"
+                                        :user |uname|)))
+           (unamep (setf (response-status *response*) 422)
+                   (lisp-render "login" '(:error "密码错误")))
+           (t (setf (response-status *response*) 422)
+              (lisp-render "login" '(:error "用户名和密码错误"))))))))
+
+
+#+END_SRC
+** /register
+*** GET
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /register
+(defroute "/register" ()
+  (lisp-render "register" `(:user ,(gethash :user *session*))))
+#+END_SRC
+*** POST
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; POST /register
+(defroute ("/register" :method :POST) (&key |uname| |pwd| |repwd| |email|)
+  (cond
+    ((or (some (lambda (s) (string= s ""))
+               (list |uname| |pwd| |repwd| |email|))
+         (string/= |pwd| |repwd|))
+     (register-error "注册信息错误"))
+    (t (if (find-user |uname| |email|)
+           (register-error "用户名或邮箱被占用")
+           (progn
+             (add-user |uname| |pwd| |email|)
+             (setf (response-status *response*) 200)
+             (lisp-render "register" '(:success "注册成功")))))))
+
+(defun register-error (msg)
+  (setf (response-status *response*) 422)
+  (lisp-render "register" `(:error ,msg)))
+#+END_SRC
+* View
+** COMMENT Code Template
+#+BEGIN_SRC lisp :tangle templates/.lisp
+(in-package :lisp2cnodejs.view)
+(load "layout")
+
+(defparameter *login-html-content* 
+  ``())
+
+(defmacro login-page-mac ()
+  `(html-template
+    (layout-template)
+    ,(merge-args
+      ,*args*
+      `(:title
+        "Login"
+        :links
+        `(,(getf *web-links* :bs-css)
+           ,(getf *web-links* :main-css))
+        :head-rest
+        `((style ()
+                 ,(->css
+                   '((".navbar-brand" (:padding "0px 20px")
+                      (img (:width "120px"
+                                   :height "100%")))
+                     ))))
+        :content ,*login-html-content*
+        :scripts
+        `(,(getf *web-links* :jq-js)
+           ,(getf *web-links* :bs-js))))))
+
+(defun login-page ()
+  (login-page-mac))
+  #+END_SRC
+  
+** Shared
+
+*** In-package
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+(in-package :lisp2cnodejs.view)
+#+END_SRC
+*** Layout
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+;; Layout
+(defmacro layout-template ()
+  ``(,,(doctype)
+       (html (:lang "en")
+             (head ()
+                   (meta (:charset "utf-8"))
+                   (meta (:name "viewport"
+                                :content "width=device-width, initial-scale=1, shrink-to-fit=no"))
+                   (meta (:name "description" :content "?"))
+                   (meta (:name "author" :content "Xt3"))
+                   (title nil ,title)
+                   ,@links
+                   ,@head-rest)
+             (body ()
+                   ,(header-navbar)
+                   ,@content ,@scripts))))
+#+END_SRC
+*** Resource
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+(defun get-resource (str) 
+  str 
+  "/images/cnodejs_light.svg")
+
+(defparameter *web-links*
+  (list
+   :main-css '(link (:rel "stylesheet" :href "/css/main.css"))
+   :main-js '(script (:src "main.js"))
+   :bs-css '(link (:crossorigin "anonymous"
+                   :rel "stylesheet"
+                   :integrity "sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+                   :href "https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css"))
+   :jq-js '(script (:src "https://code.jquery.com/jquery-3.2.1.js"
+                    :integrity "sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+                    :crossorigin "anonymous"))
+   :bs-js '(script (:crossorigin "anonymous"
+                    :src "https://cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"
+                    :integrity "sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"))
+   :ft-goo '((link (:rel "stylesheet" :type "text/css"
+                    :href "https://fonts.googleapis.com/css?family=Montserrat"))
+             (link (:rel "stylesheet" :type "text/css"
+                        :href "https://fonts.googleapis.com/css?family=Lato")))))
+#+END_SRC
+*** Navbar
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+;; Header - Navbar
+(defun search-frame ()
+  '(form (:class "search-form")
+        (div (:class "input-group")
+             ;; ,(bs-glyphicon "search")
+             (span (:class "input-group-addon")
+                   (i (:class "glyphicon glyphicon-search")))
+         (input (:class "form-control" :id "search" :type "text" :name "search")))))
+
+(defun header-navbar ()
+  (bs-navbar
+   `((div (:class "collapse navbar-collapse" :id "myNavbar")
+          ,(bs-nav
+            `(("首页" :href "/")
+              ("新手入门" :href "/getstart")
+              ("API" :href "/api")
+              ("关于" :href "/about")
+              ,@(if (getf *args* :user)
+                    '(("注销" :href "/logout"))
+                    '(("注册" :href "/register")
+                      ("登录" :href "/login"))))
+            :align "right")))
+   :style "inverse"
+   ;; :fixed "top"
+   :brand `(,(bs-nav-collapse "#myNavbar")
+             (a (:class "navbar-brand" :href "/")
+                (img (:src ,(get-resource "site-logo")
+                           :alt "logo"))))))
+#+END_SRC
+
+*** Sidebar
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+(defun main-sidebar ()
+  (bs-panel
+   :style "default"
+   :header '((span () "关于"))
+   :body '((span () "这是一个论坛"))))
+#+END_SRC
+*** Panel for Register or Login 
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+(defun reg-or-login-panel (action form-data buttons)
+  `(form (:action ,action :method "post" :class "form-horizontal")
+         ,@(loop for i in form-data
+              collect
+                (destructuring-bind (label id type &optional (name id)) i
+                  `(div (:class "form-group")
+                        (label (:class "col-sm-offset-2 col-sm-2 control-label") ,label)
+                        (div (:class "col-sm-5")
+                             (input (:name ,name :type ,type
+                                           :id ,id
+                                           :class "form-control input-sm"
+                                           :size "20"))))))
+         (div (:class "form-group")
+              (div (:class "col-sm-offset-4 col-sm-6")
+                   ,@buttons))))
+#+END_SRC
+*** Footer
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+#+END_SRC
+
+** ---
+** Login
+#+BEGIN_SRC lisp :tangle templates/login.lisp
+(in-package :lisp2cnodejs.view)
+(load "shared")
+
+(defun login-main-content ()
+  `(div (:id "content")
+        ,(bs-panel
+          :style "default"
+          :header `((,(bs-breadcrumb
+                       '((("首页") :href "/")
+                         (("登录") :class "active")))))
+          :body `((
+                   ;; Error | Success
+                   ,(let ((err (getf *args* :error))
+                          (suc (getf *args* :success)))
+                      (cond
+                        (err `(div (:class "alert alert-danger")
+                                   (strong () ,err)))
+                        (suc `(div (:class "alert alert-success")
+                                   (strong () ,suc)))
+                        (t "")))
+                    ;; Panel
+                   ,(reg-or-login-panel
+                      "/login"
+                      '(("用户名" "uname" "text")
+                        ("密码" "pwd" "password"))
+                      `((,(bs-btn `("登录")
+                                  :type "submit"
+                                  :style "primary")
+                          (a (:href "#") "忘记密码?")))))))))
+
+
+(defun login-html-content ()
+  `(,(bs-container
+      `(,(bs-row-col
+          `((9 (,(login-main-content)))
+            (3 (,(main-sidebar))))
+          :w '("md")))
+      :fluid t)))
+
+;; (defun login-js
+;;   (ps))
+
+
+(defmacro login-page-mac ()
+  `(html-template
+    (layout-template)
+    ,(merge-args
+      ,*args*
+      `(:title
+        "登录"
+        :links
+        `(,(getf *web-links* :bs-css)
+           ,(getf *web-links* :main-css))
+        :head-rest
+        `((style ()
+                 ,(->css
+                   '((".navbar" (:border-radius "0")
+                      (".navbar-brand" (:padding "0px 20px")
+                       (img (:width "120px"
+                                    :height "100%"))))
+                     (".breadcrumb" (:padding 0
+                                     :margin 0))))))
+        :content `(,@(login-html-content))
+        :scripts
+        `(,(getf *web-links* :jq-js)
+           ,(getf *web-links* :bs-js))))))
+
+(defun login-page ()
+  (login-page-mac))
+
+#+END_SRC
+** Register
+#+BEGIN_SRC lisp :tangle templates/register.lisp
+(in-package :lisp2cnodejs.view)
+(load "shared")
+
+(defun register-main-content ()
+  `(div (:id "content")
+        ,(bs-panel
+          :style "default"
+          :header `((,(bs-breadcrumb
+                       '((("首页") :href "/")
+                         (("注册") :class "active")))))
+          :body `((
+                   ;; Error | Success
+                   ,(let ((err (getf *args* :error))
+                          (suc (getf *args* :success)))
+                      (cond
+                        (err `(div (:class "alert alert-danger")
+                                   (strong () ,err)))
+                        (suc `(div (:class "alert alert-success")
+                                   (strong () ,suc)))
+                        ;; (format nil "~A" *args*)
+                        (t "")))
+                    
+                    ;; Panel
+                    ,(reg-or-login-panel
+                      "/register"
+                      '(("用户名" "uname" "text")
+                        ("密码" "pwd" "password")
+                        ("确认密码" "repwd" "password")
+                        ("电子邮箱" "email" "text"))
+                      `((,(bs-btn `("注册")
+                                  :type "submit"
+                                  :style "primary")
+                          ,(bs-btn `("重置表单")
+                                   :type "reset"
+                                   :style "info")))))))))
+
+
+(defun register-html-content ()
+  `(,(bs-container
+      `(,(bs-row-col
+          `((9 (,(register-main-content)))
+            (3 (,(main-sidebar))))
+          :w '("md")))
+      :fluid t)))
+
+
+(defmacro register-page-mac ()
+  `(html-template
+    (layout-template)
+    ;; ,(setf *args*
+    ;;        '(:title
+    ;;          "注册"
+    ;;          :links
+    ;;          `(,(getf *web-links* :bs-css)
+    ;;            ,(getf *web-links* :main-css))
+    ;;          :head-rest
+    ;;          `((style ()
+    ;;             ,(->css
+    ;;               '((".navbar" (:border-radius "0"))
+    ;;                 (".navbar-brand" (:padding "0px 20px")
+    ;;                  (img (:width "120px"
+    ;;                               :height "100%")))
+    ;;                 (".breadcrumb" (:padding 0
+    ;;                                 :margin 0))))))
+    ;;          :content `(,@(register-html-content))
+    ;;          :scripts
+    ;;          `(,(getf *web-links* :jq-js)
+    ;;            ,(getf *web-links* :bs-js))
+    ;;          :error "？？？？？？？？？"
+    ;;          :success "!!!!!!!!"))
+    ,(merge-args
+      ,*args*
+      `(:title
+        "注册"
+        :links
+        `(,(getf *web-links* :bs-css)
+           ,(getf *web-links* :main-css))
+        :head-rest
+        `((style ()
+                 ,(->css
+                   '((".navbar" (:border-radius "0"))
+                     (".navbar-brand" (:padding "0px 20px")
+                      (img (:width "120px"
+                                   :height "100%")))
+                     (".breadcrumb" (:padding 0
+                                     :margin 0))))))
+        :content `(,@(register-html-content))
+        :scripts
+        `(,(getf *web-links* :jq-js)
+           ,(getf *web-links* :bs-js))))))
+
+(defun register-page ()
+  (register-page-mac))
+#+END_SRC
+** ---
+* Model
+** COMMENT PostgreSQL
+#+BEGIN_SRC lisp :tangle src/model.lisp
+(in-package :cl-user)
+(defpackage lisp2cnodejs.model
+  (:use :cl :sxql)
+  (:import-from :lisp2cnodejs.db
+                :db
+                :with-connection)
+
+  ;; SQL
+  (:import-from :datafly
+                :execute
+                :retrieve-all
+                :retrieve-one)
+  
+  (:export :create-user-table
+           :find-user
+           :add-user
+           :auth-user))
+(in-package :lisp2cnodejs.model)
+
+(defun create-user-table ()
+  "Create user table if it doesn't exist yet."
+  (with-connection (db)
+    (execute
+     (create-table (:user :if-not-exists t)
+         ((id :type 'serial :primary-key t)
+          (username :type 'text :not-null t :unique t)
+          (password :type 'text :not-null t)
+          (email :type 'text :not-null t :unique t))))))
+
+(defun add-user (uname pwd email)
+  "add user record to database."
+  (with-connection (db)
+    (execute
+     (insert-into :user
+       (set= :username uname            
+             :password (cl-pass:hash pwd)
+             :email email)))))
+
+(defun find-username (uname)
+  "lookup user record by username."
+  (with-connection (db)
+    (retrieve-one
+     (select :*
+       (from :user)
+       (where (:= :username username))))))
+
+(defun find-email (email)
+  "lookup user record by email."
+  (with-connection (db)
+    (retrieve-one
+     (select :*
+       (from :user)
+       (where (:= :email email))))))
+
+(defun find-user (uname email)
+  "lookup user record by username or email."
+  (or (find-username uname)
+      (find-email email)))
+
+(defun auth-user (uname pwd)
+  (let ((pwd-hash (getf (find-user uname) :password)))
+    (if pwd-hash 
+        (values (cl-pass:check-password pwd pwd-hash) uname)
+        (values nil nil))))
+#+END_SRC
+** MongoDB
+#+BEGIN_SRC lisp :tangle src/model.lisp
+(in-package :cl-user)
+(defpackage lisp2cnodejs.model
+  (:use :cl :cl-mongo)
+  (:export :find-user
+           :add-user
+           :auth-user))
+(in-package :lisp2cnodejs.model)
+
+;; Database
+(db.use "node-club")
+
+;; Collection
+(defparameter *col* "user") 
+
+(defun add-user (uname pwd email)
+  "add user record to database."
+  (db.insert *col* ($ ($ "username" uname)
+                      ($ "password" ;; (cl-pass:hash pwd)
+                         pwd)
+                      ($ "email" email))))
+
+(defun find-username (uname)
+  "lookup user record by username."
+  (docs (db.find *col* ($ "username" uname))))
+
+(defun find-email (email)
+  "lookup user record by email."
+  (docs (db.find *col* ($ "email" email))))
+
+(defun find-user (uname email)
+  "lookup user record by username or email."
+  ;; (or (find-username uname)
+  ;;     (find-email email))
+  (docs (db.find *col* (kv "$or" (list ($ "username" uname)
+                                       ($ "email" email))))))
+
+(defun auth-user (uname pwd)
+  ;; (db.find *col* ($ ($ :username uname)
+  ;;                   ($ :password pwd)))
+  (let ((pwd-hash (first (get-element "password"
+                               (find-username uname)))))
+    (if pwd-hash
+        (values ;; (cl-pass:check-password pwd pwd-hash)
+         (string= pwd pwd-hash)
+         uname)
+        (values nil nil))))
+#+END_SRC
