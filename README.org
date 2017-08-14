@@ -10,5 +10,37 @@
 
 很多细节 CSS 等 暂不处理 先把个大概弄出来 这就是个学习测试
 
-* 目前
+* 目前 Now
 - 注册登录
+
+* CL 3 cnodejs
+
+** 准备 Prepared
+- Install: Emacs, Roswell(Slime, Quickload), CCL|SBCL
+- Package
+  #+BEGIN_SRC lisp
+(ql:quickload :caveman2)
+   #+END_SRC
+
+** 项目 Project
+- Create Project
+  #+BEGIN_SRC lisp
+;; Slime change work-directory
+(caveman2:make-project #P"lisp2cnodejs"
+                       :author "Xt3")
+  #+END_SRC
+- Run (-> [[http://localhost:30000][http://localhost:30000]])
+  #+BEGIN_SRC lisp
+(ql:quickload :lisp2cnodejs)
+
+(webtest:start :port 30000)
+(ql:quickload :lisp2cnodejs) ;+ change file
+(webtest:stop)
+  #+END_SRC
+
+** 代码 Coding
+- [[./cnodejs.org][cnodejs.org]]
+  - 代码生成: [Emacs] -> M-x org-babel-tangle
+
+* Copyright
+Copyright (c) 2017 Xt3
