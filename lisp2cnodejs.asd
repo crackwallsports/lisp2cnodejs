@@ -35,6 +35,7 @@
                :sxql
                ;; NoSQL : MongoDB
                :cl-mongo
+               :cl-mongo-id
                )
   :components ((:module "src"
                 :components

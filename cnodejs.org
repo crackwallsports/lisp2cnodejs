@@ -3,12 +3,14 @@
 
 
 * Arc
-- 首页 
-  - 登录
-  - 注册
-  - 注销
-- 话题
-  - 创建
+- 首页 /
+  - 显示话题
+- 注销 /logout
+- 登录 /login
+- 注册 /register
+- 话题 /topic
+  - 创建 /create
+    - Markdown 编辑器
 
 * Base
 ** COMMENT Router Template
@@ -120,13 +122,28 @@
   )
 #+END_SRC
 ** /
-*** GET
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; GET /
-(defroute "/" ()
-  (if (gethash :user *session*)
-      (format nil "<h1>欢迎 ~A</h1>" (gethash :user *session*))
-      (format nil "<h1>首页</h1>")))
+;; (defroute "/" ()
+;;   (lisp-render "index" `(:user ,(gethash :user *session*))))
+
+(defroute "/"  (&key (|tab| "all") (|page| "1"))
+  (let* ((int (parse-integer |page|))
+        (page (if (> int 0) int 1))
+        (count 1))
+    (multiple-value-bind (topics allcount)
+        (find-sort-topic (if (string/= |tab| "all") `(("tab" ,|tab|)))
+                         "insertTime"
+                         t
+                         :skip (* (- page 1) count)
+                         :limit count)
+      ;; (format nil "tab=~a page=~a pc=~a" |tab| page allcount )
+      (lisp-render "index" `(:user ,(gethash :user *session*)
+                                   :topics ,(topic-docs->hts topics)
+                                   :tab ,|tab|
+                                   :page ,page
+                                   :pcount ,(ceiling (/ allcount count)))))))
+
 #+END_SRC
 ** /logout
 #+BEGIN_SRC lisp :tangle src/web.lisp
@@ -386,6 +403,127 @@
 #+END_SRC
 
 ** ---
+
+** Index
+#+BEGIN_SRC lisp :tangle templates/index.lisp
+(in-package :lisp2cnodejs.view)
+(load "shared")
+
+(defparameter *topics* (getf *args* :topics))
+
+(defun to-n (d &optional (n 0)) (if (< d n) n d))
+(defun human-date (date)
+  (multiple-value-bind
+          (second minute hour date month year)
+        (decode-universal-time date)
+      (format nil "~4D.~2,'0D.~2,'0D ~2,'0D:~2,'0D:~2,'0D"
+              year
+              month
+              date
+              hour
+              minute
+              second)))
+
+(defun topic-list ()
+  (loop for i in *topics*
+     collect
+       `(div (:class "cell")
+             (span (:class "user-name pull-left")
+                   ,(gethash "username" i))
+             (div (:class "last-time pull-right")
+                (span (:class "last-active-time")
+                      ,(human-date (gethash "insertTime" i))))
+             (div (:class "topic-title-wrapper")
+                  (a (:class "topic-title"
+                             :href ,(format nil "/topic/~A"
+                                            (gethash "id" i)))
+                     ,(gethash "title" i))))))
+
+(defun index-main-content ()
+  `(div (:id "content")
+        ,(bs-panel
+          :style "default"
+          :header
+          `((,(bs-breadcrumb
+               '((("全部")
+                  :href "/"
+                  :class "topic-tab current-tab")
+                 (("精华")
+                  :href "/?tab=tab1"
+                  :class "topic-tab")
+                 (("分享")
+                  :href "/?tab=tab2"
+                  :class "topic-tab")))))
+          :body
+          `((
+             ;; Topic List
+             (div (:class "topic-list")
+                  ,@(topic-list))
+
+             ;; Pagination
+             ,(let* ((tab (getf *args* :tab))
+                     (page (getf *args* :page))
+                     (pc (getf *args* :pcount))
+                     (pn (remove-if
+                          #'null
+                          `(,(if (> page 10)
+                                 `(("<<")
+                                   :href ,(format nil "/?tab=~A&page=1" tab)))
+                             ,(if (> page 4)
+                                  `(("...")
+                                    :href ,(format nil "/?tab=~A&page=1" tab)))
+                             ,@(loop for i from (to-n (- page 3) 1) below page
+                                  collect 
+                                    `((,i)
+                                      :href ,(format nil "/?tab=~A&page=~A" tab i)))
+                             ((,page) :class "disabled active")
+                             ,@(loop for i from (1+ page) to (min (+ page 3) pc )
+                                  collect
+                                    `((,i)
+                                      :href ,(format nil "/?tab=~A&page=~A" tab i)))
+                             ,(if (< (+ page 3) pc)
+                                  `(("...")
+                                    :href ,(format nil "/?tab=~A&page=~A" tab pc)))
+                             ,(if (> page 10)
+                                  `((">>")
+                                    :href ,(format nil "/?tab=~A&page=~A" tab pc)))))))
+                
+                (bs-pagination
+                 `(,@pn))
+                ;; (format nil "tab=~a page=~a pc=~a" tab page pc )
+                )
+             
+             )))))
+
+(defun index-html-content ()
+  `(,(bs-container
+      `(,(bs-row-col
+          `((9 (,(index-main-content)))
+            (3 (,(main-sidebar))))
+          :w '("md")))
+      :fluid t)))
+
+(defmacro index-page-mac ()
+  `(html-template
+    (layout-template)
+    ,(merge-args
+      ,*args*
+      `(:title
+        "Login"
+        :links
+        `(,(getf *web-links* :bs-css)
+           ,(getf *web-links* :main-css))
+        :head-rest
+        `()
+        :content `(,@(index-html-content))
+        :scripts
+        `(,(getf *web-links* :jq-js)
+           ,(getf *web-links* :bs-js))))))
+
+(defun index-page ()
+  (index-page-mac))
+  #+END_SRC
+ 
 ** Login
 #+BEGIN_SRC lisp :tangle templates/login.lisp
 (in-package :lisp2cnodejs.view)
@@ -728,11 +866,14 @@
 #+BEGIN_SRC lisp :tangle src/model.lisp
 (in-package :cl-user)
 (defpackage lisp2cnodejs.model
-  (:use :cl :cl-mongo)
+  (:use :cl :cl-mongo :cl-mongo-id)
   (:export :find-user
            :add-user
            :auth-user
-           :add-topic))
+           :add-topic
+           :find-topic
+           :find-sort-topic
+           :topic-docs->hts))
 (in-package :lisp2cnodejs.model)
 
 ;; Database
@@ -742,28 +883,33 @@
 (defparameter *user-col* "user")
 (defparameter *topic-col* "topic") 
 
+;; Count
+(defun doc-count (col &key (sel :all))
+  (first (get-element "n" (docs (db.count col sel)))))
+
 ;; User
 (defun add-user (uname pwd email)
-  "add user record to database."
+  "add user to database."
   (db.insert *user-col* ($ ($ "username" uname)
                            ($ "password" ;; (cl-pass:hash pwd)
                               pwd)
                            ($ "email" email))))
 
 (defun find-username (uname)
-  "lookup user record by username."
+  "lookup user by username."
   (docs (db.find *user-col* ($ "username" uname))))
 
 (defun find-email (email)
-  "lookup user record by email."
+  "lookup user by email."
   (docs (db.find *user-col* ($ "email" email))))
 
 (defun find-user (uname email)
-  "lookup user record by username or email."
+  "lookup user by username or email."
   ;; (or (find-username uname)
   ;;     (find-email email))
-  (docs (db.find *user-col* (kv "$or" (list ($ "username" uname)
-                                       ($ "email" email))))))
+  (docs (db.find *user-col* (kv "$or"
+                                (list ($ "username" uname)
+                                      ($ "email" email))))))
 
 (defun auth-user (uname pwd)
   ;; (db.find *user-col* ($ ($ :username uname)
@@ -776,12 +922,59 @@
          uname)
         (values nil nil))))
 
+
 ;; Topic
 (defun add-topic (uname tab title content date)
-  "add user record to database."
+  "add topic to database."
   (db.insert *topic-col* ($ ($ "title" title)
                            ($ "content" content)
                            ($ "tab" tab)
                            ($ "username" uname)
                            ($ "insertTime" date))))
+
+
+(defun find-topic (query &optional option)
+  "find topic from database."
+  (let* ((qy (if query
+                 (apply #'kv (loop for (k v) in query
+                                collect (kv k v)))
+                 :all) )
+         (docs (docs (apply #'db.find
+                            ,*topic-col*
+                            qy
+                            option)) ))
+    (values docs
+            (doc-count *topic-col* :sel qy))))
+
+(defun find-sort-topic (query field asc &key (skip 0) (limit 0))
+  "sort topic from database."
+  (let* ((qy (if query
+                 (apply #'kv (loop for (k v) in query
+                                collect (kv k v)))
+                 :all) )
+         (docs (docs (db.sort *topic-col* qy
+                             :field field :asc asc
+                             :skip skip :limit limit ))))
+    (values docs
+            (doc-count *topic-col* :sel qy))))
+
+
+
+
+;; Help
+(defun topic-docs->hts (docs)
+  (let (hts)
+    (loop for i in docs
+       do (let ((ht (make-hash-table :test 'equal)))
+            (setf (gethash "id" ht)  (oid-str (doc-id i)))
+            (setf (gethash "title" ht) (get-element "title" i))
+            (setf (gethash "content" ht) (get-element "content" i))
+            (setf (gethash "tab" ht) (get-element "tab" i))
+            (setf (gethash "username" ht) (get-element "username" i))
+            (setf (gethash "insertTime" ht) (get-element "insertTime" i))
+            (push ht hts)))
+    (nreverse hts)))
+
+
 #+END_SRC
+

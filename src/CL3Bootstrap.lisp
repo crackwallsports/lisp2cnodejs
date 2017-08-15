@@ -12,7 +12,8 @@
            :bs-navbar
            :bs-nav
            :bs-nav-collapse
-           :bs-breadcrumb))
+           :bs-breadcrumb
+           :bs-pagination))
 (in-package :xt3.web.bootstrap)
 
 (defun join-class (cll)
@@ -188,3 +189,13 @@
                                (a (:href ,href) ,@(to-list page)))
                           `(li (:class ,class ,@atts)
                                ,@(to-list page)))))))
+
+(defun bs-pagination (pages &key (class "") atts (size ""))
+  `(ul (,@(join-class `("pagination"
+                        ,(empty-str-or size :add "pagination-")
+                        ,class))
+          ,@atts)
+       ,@(loop for i in pages
+            collect (destructuring-bind (page &key (href "#") (class "") atts) i
+                      `(li (:class ,class ,@atts)
+                           (a (:href ,href) ,@(to-list page)))))))

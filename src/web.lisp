@@ -33,10 +33,25 @@
   )
 
 ;; GET /
-(defroute "/" ()
-  (if (gethash :user *session*)
-      (format nil "<h1>欢迎 ~A</h1>" (gethash :user *session*))
-      (format nil "<h1>首页</h1>")))
+;; (defroute "/" ()
+;;   (lisp-render "index" `(:user ,(gethash :user *session*))))
+
+(defroute "/"  (&key (|tab| "all") (|page| "1"))
+  (let* ((int (parse-integer |page|))
+        (page (if (> int 0) int 1))
+        (count 1))
+    (multiple-value-bind (topics allcount)
+        (find-sort-topic (if (string/= |tab| "all") `(("tab" ,|tab|)))
+                         "insertTime"
+                         t
+                         :skip (* (- page 1) count)
+                         :limit count)
+      ;; (format nil "tab=~a page=~a pc=~a" |tab| page allcount )
+      (lisp-render "index" `(:user ,(gethash :user *session*)
+                                   :topics ,(topic-docs->hts topics)
+                                   :tab ,|tab|
+                                   :page ,page
+                                   :pcount ,(ceiling (/ allcount count)))))))
 
 ;; GET /logout
 (defroute "/logout" ()
