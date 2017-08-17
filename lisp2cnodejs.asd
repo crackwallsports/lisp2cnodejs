@@ -31,6 +31,9 @@
                ;; JS
                :parenscript
 
+               ;; Markdown
+               :markdown.cl
+
                ;; for DB
                ;; SQL
                :datafly

@@ -66,7 +66,7 @@
           :body `(( ;; Content
                    (div (:class "topic-content")
                         ;; ? markdown
-                        ,(gethash "content" *topic*)))))))
+                        ,(markdown:parse (gethash "content" *topic*))))))))
 
 (defun detail-html-content ()
   `(,(bs-container
