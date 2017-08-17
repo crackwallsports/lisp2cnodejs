@@ -34,7 +34,10 @@
                   :class "topic-tab")
                  (("分享")
                   :href "/?tab=tab2"
-                  :class "topic-tab")))))
+                  :class "topic-tab")
+                 (("我要发话")
+                  :href "/topic/create"
+                  :class "topic-tab pull-right")))))
           :body
           `((
              ;; Topic List
@@ -93,14 +96,7 @@
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar" (:border-radius "0")
-                      (".navbar-brand" (:padding "0px 20px")
-                       (img (:width "120px"
-                                    :height "100%"))))
-                     (".breadcrumb" (:padding 0
-                                     :margin 0))))))
+        `()
         :content `(,@(index-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)

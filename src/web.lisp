@@ -3,6 +3,7 @@
 (defpackage lisp2cnodejs.web
   (:use :cl
         :caveman2
+        :xt3.web.base
         :lisp2cnodejs.config
         :lisp2cnodejs.view
         :lisp2cnodejs.model
@@ -41,7 +42,7 @@
         (page (if (> int 0) int 1))
         (count 10))
     (multiple-value-bind (topics allcount)
-        (find-sort-topic (if (string/= |tab| "all") `(("tab" ,|tab|)))
+        (find-sort-topics (if (string/= |tab| "all") `(("tab" ,|tab|)))
                          "insertTime"
                          t
                          :skip (* (- page 1) count)
@@ -57,21 +58,6 @@
 (defroute "/logout" ()
   (setf (gethash :user *session*) nil)
   (redirect "/"))
-
-;; GET /topic/:tid
-(defroute "/topic/:tid" (&key (tid ""))
-  (format nil "~a" tid)
-  (let ((topics (find-topic-by-id tid)))
-  
-    ;; reply
-
-    ;; Render
-    (lisp-render "topic-detail"
-                 `(:user ,(gethash :user *session*)
-                         :topics ,(first (topic-docs->hts topics))
-                         ;; :count ,count :replys ,replys
-                         )))
-  )
 
 ;; /login | /register
 (defroute ("/(login)|(register)" :regexp t :method :ANY) ()
@@ -153,3 +139,30 @@
                     (get-universal-time))
          (lisp-render "topic-create" '(:success "话题发表成功!"
                                         :user uname)))))))
+
+;; GET /topic/:tid
+(defroute "/topic/:tid" (&key (tid ""))
+  ;; (format nil "~a" tid)
+  (let ((topic (find-topic-by-id tid)))
+    (multiple-value-bind (replys count)
+        (find-sort-replys (if (string/= tid "") `(("topic-id" ,tid)))
+                         "insertTime"
+                         t)
+      (lisp-render "topic-detail"
+                   `(:user ,(gethash :user *session*)
+                           :topic ,(first (topic-docs->hts topic))
+                           :count ,count :replys ,(reply-docs->hts replys))))))
+
+;; POST /reply/add
+(defroute ("/reply/add" :method :POST) (&key (|tid| "") (|content| ""))
+  (let ((con (string-trim '(#\Space #\Tab #\Newline #\Return) |content|)))
+    (cond
+      ((string= con "")
+       (setf (response-status *response*) 422)
+       ;; ? Ajax
+       "信息不完整!")
+      (t (add-reply (gethash :user *session*)
+                    |tid|
+                    con
+                    (get-universal-time))
+         (redirect (concat "/topic/" |tid|))))))

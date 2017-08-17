@@ -25,7 +25,7 @@
                    (div (:class "markdown_in_editor")
                         (textarea (:class "editor"
                                           :name "content"
-                                          :id ""
+                                          :id "md-editor"
                                           :cols "30"
                                           :rows "10")))))
          (div (:class "form-group editor_buttons")
@@ -75,20 +75,17 @@
         "发表话题"
         :links
         `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
+           ,(getf *web-links* :main-css)
+           ,(getf *web-links* :md-editor-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar" (:border-radius "0")
-                      (".navbar-brand" (:padding "0px 20px")
-                       (img (:width "120px"
-                                    :height "100%"))))
-                     (".breadcrumb" (:padding 0
-                                     :margin 0))))))
+        `()
         :content `(,@(create-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
+           ,(getf *web-links* :bs-js)
+           ,(getf *web-links* :md-editor-js)
+           (script ()
+                   "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))))
 
 (defun topic-create-page ()
   (topic-create-page-mac))

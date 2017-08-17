@@ -28,6 +28,8 @@
                ;; :djula
                :plump
                :parenscript
+               ;; JS
+               :parenscript
 
                ;; for DB
                ;; SQL
@@ -40,10 +42,12 @@
   :components ((:module "src"
                 :components
                 ((:file "main" :depends-on ("config" "view" "db"))
-                 (:file "web" :depends-on ("view" "model"))
+                 (:file "web" :depends-on ("view" "model" "base"))
                  (:file "view" :depends-on ("config" "base" "CL3Bootstrap"))
                  (:file "model" :depends-on ("db"))
                  (:file "db" :depends-on ("config"))
+                 (:file "css" :depends-on ("config" "base"))
+                 (:file "js" :depends-on ("config" "base"))
                  (:file "CL3Bootstrap")
                  (:file "base")
                  (:file "config"))))

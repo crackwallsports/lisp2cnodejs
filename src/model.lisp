@@ -7,10 +7,14 @@
            :add-user
            :auth-user
            :add-topic
-           :find-topic
-           :find-sort-topic
+           :find-topics
+           :find-sort-topics
            :find-topic-by-id
-           :topic-docs->hts))
+           :topic-docs->hts
+           :add-reply
+           :find-replys
+           :find-sort-replys
+           :reply-docs->hts))
 (in-package :lisp2cnodejs.model)
 
 ;; Database
@@ -88,7 +92,7 @@
                            ($ "username" uname)
                            ($ "insertTime" date))))
 
-(defun find-topic (query &optional option)
+(defun find-topics (query &optional option)
   "find topic from database."
   (let* ((qy (if query
                  (apply #'kv (loop for (k v) in query
@@ -101,7 +105,7 @@
     (values docs
             (doc-count *topic-col* :sel qy))))
 
-(defun find-sort-topic (query field asc &key (skip 0) (limit 0))
+(defun find-sort-topics (query field asc &key (skip 0) (limit 0))
   "sort topic from database."
   (let* ((qy (if query
                  (apply #'kv (loop for (k v) in query
@@ -116,3 +120,53 @@
 (defun find-topic-by-id (id)
   (let ((oid (make-bson-oid :oid (oid id))))
     (docs (db.find *topic-col* (kv "_id" oid)))))
+
+;; Topic
+(defparameter *reply-col* "reply")
+
+;; Help
+(defun reply-docs->hts (docs)
+  (let (hts)
+    (loop for i in docs
+       do (let ((ht (make-hash-table :test 'equal)))
+            (setf (gethash "id" ht)  (oid-str (doc-id i)))
+            (setf (gethash "username" ht) (get-element "username" i))
+            (setf (gethash "tid" ht) (get-element "topic-id" i))
+            (setf (gethash "content" ht) (get-element "content" i))
+            (setf (gethash "insertTime" ht) (get-element "insertTime" i))
+            (push ht hts)))
+    (nreverse hts)))
+
+;; Add
+(defun add-reply (uname tid content date)
+  "add reply to database."
+  (db.insert *reply-col*
+             ($ ($ "username" uname)
+                ($ "topic-id" tid)
+                ($ "content" content)
+                ($ "insertTime" date))))
+
+(defun find-replys (query &optional option)
+  "find reply from database."
+  (let* ((qy (if query
+                 (apply #'kv (loop for (k v) in query
+                                collect (kv k v)))
+                 :all) )
+         (docs (docs (apply #'db.find
+                            *reply-col*
+                            qy
+                            option)) ))
+    (values docs
+            (doc-count *reply-col* :sel qy))))
+
+(defun find-sort-replys (query field asc &key (skip 0) (limit 0))
+  "sort reply from database."
+  (let* ((qy (if query
+                 (apply #'kv (loop for (k v) in query
+                                collect (kv k v)))
+                 :all) )
+         (docs (docs (db.sort *reply-col* qy
+                             :field field :asc asc
+                             :skip skip :limit limit ))))
+    (values docs
+            (doc-count *reply-col* :sel qy))))

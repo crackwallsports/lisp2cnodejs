@@ -23,22 +23,29 @@
 
 (defparameter *web-links*
   (list
+   ;; Main
    :main-css '(link (:rel "stylesheet" :href "/css/main.css"))
-   :main-js '(script (:src "main.js"))
+   :main-js '(script (:src "/js/main.js"))
+   ;; jQuery
+   :jq-js '(script (:src "https://code.jquery.com/jquery-3.2.1.js"
+                    :integrity "sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+                    :crossorigin "anonymous"))
+   ;; Bootstrap
    :bs-css '(link (:crossorigin "anonymous"
                    :rel "stylesheet"
                    :integrity "sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
                    :href "https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css"))
-   :jq-js '(script (:src "https://code.jquery.com/jquery-3.2.1.js"
-                    :integrity "sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
-                    :crossorigin "anonymous"))
    :bs-js '(script (:crossorigin "anonymous"
                     :src "https://cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"
                     :integrity "sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"))
-   :ft-goo '((link (:rel "stylesheet" :type "text/css"
+   ;; Font
+   :goo-ft '((link (:rel "stylesheet" :type "text/css"
                     :href "https://fonts.googleapis.com/css?family=Montserrat"))
              (link (:rel "stylesheet" :type "text/css"
-                        :href "https://fonts.googleapis.com/css?family=Lato")))))
+                    :href "https://fonts.googleapis.com/css?family=Lato")))
+   ;; Markdown Editor
+   :md-editor-css '(link (:rel "stylesheet" :href "https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css"))
+   :md-editor-js '(script (:src "https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"))))
 
 ;; Header - Navbar
 (defun search-frame ()

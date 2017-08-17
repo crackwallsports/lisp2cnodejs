@@ -63,6 +63,62 @@
   `(let ((*connection* ,conn))
      ,@body))
 #+END_SRC
+* CSS
+** static/css/main.css
+#+BEGIN_SRC lisp :tangle src/css.lisp
+;; Package
+(in-package :cl-user)
+(defpackage lisp2cnodejs.css
+  (:use :cl :xt3.web.base)
+  (:import-from :lisp2cnodejs.config
+                :*static-directory*))
+(in-package :lisp2cnodejs.css)
+
+(->file
+ (merge-pathnames #P"css/main.css" *static-directory*)
+ #'->css
+ `((* ( ;; :border "1px dashed red"
+       :box-sizing "border-box"
+       :padding 0 :margin 0))
+   (html (:font-size "62.5%"))
+   (body (:line-height "1.8"))
+   (a (:text-decoration "none"))
+   ("ul, li" (:list-style "none"))
+   ;; 
+   (".navbar" (:border-radius "0")
+      (".navbar-brand" (:padding "0px 20px")
+       (img (:width "120px"
+                    :height "100%"))))
+   (".breadcrumb" (:padding 0
+                     :margin 0))
+   ))
+#+END_SRC
+
+* JS
+
+** static/js/main.js
+#+BEGIN_SRC lisp :tangle src/js.lisp
+;; Package
+(in-package :cl-user)
+(defpackage lisp2cnodejs.js
+  (:use :cl :xt3.web.base :parenscript)
+  (:import-from :lisp2cnodejs.config
+                :*static-directory*)
+  ;; (:import-from 
+  ;;               :ps
+  ;;               :ps*
+  ;;               :chain
+  ;;               :create
+  ;;               :var
+  ;;               :)
+  )
+(in-package :lisp2cnodejs.js)
+
+(->file
+ (merge-pathnames "js/main.js" *static-directory*)
+ (lambda (ag) (ps* ag))
+ '(var x 3))
+#+END_SRC
 
 * -----
 * Router
@@ -88,6 +144,7 @@
 (defpackage lisp2cnodejs.web
   (:use :cl
         :caveman2
+        :xt3.web.base
         :lisp2cnodejs.config
         :lisp2cnodejs.view
         :lisp2cnodejs.model
@@ -132,7 +189,7 @@
         (page (if (> int 0) int 1))
         (count 10))
     (multiple-value-bind (topics allcount)
-        (find-sort-topic (if (string/= |tab| "all") `(("tab" ,|tab|)))
+        (find-sort-topics (if (string/= |tab| "all") `(("tab" ,|tab|)))
                          "insertTime"
                          t
                          :skip (* (- page 1) count)
@@ -151,23 +208,6 @@
 (defroute "/logout" ()
   (setf (gethash :user *session*) nil)
   (redirect "/"))
-#+END_SRC
-** Topic-detail : /topic/:tid
-#+BEGIN_SRC lisp :tangle src/web.lisp
-;; GET /topic/:tid
-(defroute "/topic/:tid" (&key (tid ""))
-  (format nil "~a" tid)
-  (let ((topics (find-topic-by-id tid)))
-  
-    ;; reply
-
-    ;; Render
-    (lisp-render "topic-detail"
-                 `(:user ,(gethash :user *session*)
-                         :topics ,(first (topic-docs->hts topics))
-                         ;; :count ,count :replys ,replys
-                         )))
-  ) 
 #+END_SRC
 
 
@@ -274,6 +314,38 @@
                                         :user uname)))))))
 
 #+END_SRC
+** Topic-detail : /topic/:tid
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /topic/:tid
+(defroute "/topic/:tid" (&key (tid ""))
+  ;; (format nil "~a" tid)
+  (let ((topic (find-topic-by-id tid)))
+    (multiple-value-bind (replys count)
+        (find-sort-replys (if (string/= tid "") `(("topic-id" ,tid)))
+                         "insertTime"
+                         t)
+      (lisp-render "topic-detail"
+                   `(:user ,(gethash :user *session*)
+                           :topic ,(first (topic-docs->hts topic))
+                           :count ,count :replys ,(reply-docs->hts replys)))))) 
+#+END_SRC
+
+** Reply-add : /reply/add
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; POST /reply/add
+(defroute ("/reply/add" :method :POST) (&key (|tid| "") (|content| ""))
+  (let ((con (string-trim '(#\Space #\Tab #\Newline #\Return) |content|)))
+    (cond
+      ((string= con "")
+       (setf (response-status *response*) 422)
+       ;; ? Ajax
+       "信息不完整!")
+      (t (add-reply (gethash :user *session*)
+                    |tid|
+                    con
+                    (get-universal-time))
+         (redirect (concat "/topic/" |tid|))))))
+#+END_SRC
 
 
 * View
@@ -339,22 +411,30 @@
 
 (defparameter *web-links*
   (list
+   ;; Main
    :main-css '(link (:rel "stylesheet" :href "/css/main.css"))
-   :main-js '(script (:src "main.js"))
+   :main-js '(script (:src "/js/main.js"))
+   ;; jQuery
+   :jq-js '(script (:src "https://code.jquery.com/jquery-3.2.1.js"
+                    :integrity "sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+                    :crossorigin "anonymous"))
+   ;; Bootstrap
    :bs-css '(link (:crossorigin "anonymous"
                    :rel "stylesheet"
                    :integrity "sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
                    :href "https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css"))
-   :jq-js '(script (:src "https://code.jquery.com/jquery-3.2.1.js"
-                    :integrity "sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
-                    :crossorigin "anonymous"))
    :bs-js '(script (:crossorigin "anonymous"
                     :src "https://cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"
                     :integrity "sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"))
-   :ft-goo '((link (:rel "stylesheet" :type "text/css"
+   ;; Font
+   :goo-ft '((link (:rel "stylesheet" :type "text/css"
                     :href "https://fonts.googleapis.com/css?family=Montserrat"))
              (link (:rel "stylesheet" :type "text/css"
-                        :href "https://fonts.googleapis.com/css?family=Lato")))))
+                    :href "https://fonts.googleapis.com/css?family=Lato")))
+   ;; Markdown Editor
+   :md-editor-css '(link (:rel "stylesheet" :href "https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css"))
+   :md-editor-js '(script (:src "https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"))))
+
 #+END_SRC
 *** Navbar
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
@@ -474,7 +554,10 @@
                   :class "topic-tab")
                  (("分享")
                   :href "/?tab=tab2"
-                  :class "topic-tab")))))
+                  :class "topic-tab")
+                 (("我要发话")
+                  :href "/topic/create"
+                  :class "topic-tab pull-right")))))
           :body
           `((
              ;; Topic List
@@ -533,14 +616,7 @@
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar" (:border-radius "0")
-                      (".navbar-brand" (:padding "0px 20px")
-                       (img (:width "120px"
-                                    :height "100%"))))
-                     (".breadcrumb" (:padding 0
-                                     :margin 0))))))
+        `()
         :content `(,@(index-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
@@ -606,14 +682,7 @@
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar" (:border-radius "0")
-                      (".navbar-brand" (:padding "0px 20px")
-                       (img (:width "120px"
-                                    :height "100%"))))
-                     (".breadcrumb" (:padding 0
-                                     :margin 0))))))
+        `()
         :content `(,@(login-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
@@ -674,27 +743,6 @@
 (defmacro register-page-mac ()
   `(html-template
     (layout-template)
-    ;; ,(setf *args*
-    ;;        '(:title
-    ;;          "注册"
-    ;;          :links
-    ;;          `(,(getf *web-links* :bs-css)
-    ;;            ,(getf *web-links* :main-css))
-    ;;          :head-rest
-    ;;          `((style ()
-    ;;             ,(->css
-    ;;               '((".navbar" (:border-radius "0"))
-    ;;                 (".navbar-brand" (:padding "0px 20px")
-    ;;                  (img (:width "120px"
-    ;;                               :height "100%")))
-    ;;                 (".breadcrumb" (:padding 0
-    ;;                                 :margin 0))))))
-    ;;          :content `(,@(register-html-content))
-    ;;          :scripts
-    ;;          `(,(getf *web-links* :jq-js)
-    ;;            ,(getf *web-links* :bs-js))
-    ;;          :error "？？？？？？？？？"
-    ;;          :success "!!!!!!!!"))
     ,(merge-args
       ,*args*
       `(:title
@@ -703,14 +751,7 @@
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar" (:border-radius "0"))
-                     (".navbar-brand" (:padding "0px 20px")
-                      (img (:width "120px"
-                                   :height "100%")))
-                     (".breadcrumb" (:padding 0
-                                     :margin 0))))))
+        `()
         :content `(,@(register-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
@@ -750,7 +791,7 @@
                    (div (:class "markdown_in_editor")
                         (textarea (:class "editor"
                                           :name "content"
-                                          :id ""
+                                          :id "md-editor"
                                           :cols "30"
                                           :rows "10")))))
          (div (:class "form-group editor_buttons")
@@ -800,20 +841,17 @@
         "发表话题"
         :links
         `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
+           ,(getf *web-links* :main-css)
+           ,(getf *web-links* :md-editor-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar" (:border-radius "0")
-                      (".navbar-brand" (:padding "0px 20px")
-                       (img (:width "120px"
-                                    :height "100%"))))
-                     (".breadcrumb" (:padding 0
-                                     :margin 0))))))
+        `()
         :content `(,@(create-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
+           ,(getf *web-links* :bs-js)
+           ,(getf *web-links* :md-editor-js)
+           (script ()
+                   "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))))
 
 (defun topic-create-page ()
   (topic-create-page-mac))
@@ -823,33 +861,82 @@
 (in-package :lisp2cnodejs.view)
 (load "shared")
 
-(defparameter *topics* (getf *args* :topics))
+(defparameter *topic* (getf *args* :topic))
+(defparameter *replys* (getf *args* :replys))
+
+(defun reply-add-form (action)
+  `(form (:action ,action :method "post"
+                  :class "form-horizontal"
+                  :id "reply-add-form")
+         (div (:class "form-group")
+              (input (:name "tid" :type "hidden"
+                            :value ,(format nil "~A" (gethash "id" *topic*)) 
+                            :class "form-control input-sm")))
+         (div (:class "form-group")
+              (div (:class "markdown_editor in_editor")
+                   (div (:class "markdown_in_editor")
+                        (textarea (:class "editor"
+                                          :name "content"
+                                          :id ""
+                                          :cols "30"
+                                          :rows "10")))))
+         (div (:class "form-group editor_buttons")
+              ,(bs-btn `("回复")
+                       :type "submit"
+                       :style "primary"))))
+
+(defun reply-panel ()
+  (bs-panel
+   :style "default"
+   :header `(((span () "添加回复")))
+   :body `(( ;; Form + Editor
+            ,(reply-add-form
+              "/reply/add")))))
+
+(defun reply-list ()
+  (bs-panel
+   :style "default"
+   :header `((span ()
+                   ,(getf *args* :count)
+                   "个回复"))
+   :body `((,@(loop for reply in *replys*
+                 collect
+                   `(div (:class "cell")
+                         (span (:class "reply-author pull-left")
+                               ,(gethash "username" reply))
+                         (span (:class "reply-time pull-right")
+                               ,(human-date (gethash "insertTime" reply)))
+                         (div (:class "reply-content")
+                              ;; ? markdown
+                              ,(gethash "content" reply))))))))
 
 (defun detail-main-content ()
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `(((span (:class "topic-full-title")
-                           ,(gethash "title" *topics*))
+                           ,(gethash "title" *topic*))
                      (div (:class "changes")
                           (span ()
                                 "作者: "
-                                ,(gethash "username" *topics*))
+                                ,(gethash "username" *topic*))
                           (span ()
                                 "发布时间: "
-                                ,(human-date (gethash "insertTime" *topics*))))))
-          :body `((;; Content
+                                ,(human-date (gethash "insertTime" *topic*))))))
+          :body `(( ;; Content
                    (div (:class "topic-content")
-                        ;; Maybe markdown
-                        ,(gethash "content" *topics*))
-                   
-                   ;; Reply
-                   )))))
+                        ;; ? markdown
+                        ,(gethash "content" *topic*)))))))
 
 (defun detail-html-content ()
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(detail-main-content)))
+          `((9 (,(detail-main-content)
+                 ;; Reply
+                 ,(if (plusp (getf *args* :count))
+                      (reply-list))
+                 ,(if (getf *args* :user)
+                      (reply-panel))))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
@@ -875,7 +962,7 @@
   (topic-detail-page-mac))
   #+END_SRC
   
-
+  
 * Model
 ** COMMENT PostgreSQL
 #+BEGIN_SRC lisp :tangle src/model.lisp
@@ -958,10 +1045,14 @@
            :add-user
            :auth-user
            :add-topic
-           :find-topic
-           :find-sort-topic
+           :find-topics
+           :find-sort-topics
            :find-topic-by-id
-           :topic-docs->hts))
+           :topic-docs->hts
+           :add-reply
+           :find-replys
+           :find-sort-replys
+           :reply-docs->hts))
 (in-package :lisp2cnodejs.model)
 #+END_SRC
 
@@ -1070,7 +1161,7 @@
 
 **** Find
 #+BEGIN_SRC lisp :tangle src/model.lisp
-(defun find-topic (query &optional option)
+(defun find-topics (query &optional option)
   "find topic from database."
   (let* ((qy (if query
                  (apply #'kv (loop for (k v) in query
@@ -1083,7 +1174,7 @@
     (values docs
             (doc-count *topic-col* :sel qy))))
 
-(defun find-sort-topic (query field asc &key (skip 0) (limit 0))
+(defun find-sort-topics (query field asc &key (skip 0) (limit 0))
   "sort topic from database."
   (let* ((qy (if query
                  (apply #'kv (loop for (k v) in query
@@ -1102,3 +1193,66 @@
 
 #+END_SRC
 
+*** Reply Collection
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; Topic
+(defparameter *reply-col* "reply")
+#+END_SRC
+
+**** Helper
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; Help
+(defun reply-docs->hts (docs)
+  (let (hts)
+    (loop for i in docs
+       do (let ((ht (make-hash-table :test 'equal)))
+            (setf (gethash "id" ht)  (oid-str (doc-id i)))
+            (setf (gethash "username" ht) (get-element "username" i))
+            (setf (gethash "tid" ht) (get-element "topic-id" i))
+            (setf (gethash "content" ht) (get-element "content" i))
+            (setf (gethash "insertTime" ht) (get-element "insertTime" i))
+            (push ht hts)))
+    (nreverse hts)))
+
+#+END_SRC
+
+**** Add
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; Add
+(defun add-reply (uname tid content date)
+  "add reply to database."
+  (db.insert *reply-col*
+             ($ ($ "username" uname)
+                ($ "topic-id" tid)
+                ($ "content" content)
+                ($ "insertTime" date))))
+#+END_SRC
+
+**** Find
+#+BEGIN_SRC lisp :tangle src/model.lisp
+(defun find-replys (query &optional option)
+  "find reply from database."
+  (let* ((qy (if query
+                 (apply #'kv (loop for (k v) in query
+                                collect (kv k v)))
+                 :all) )
+         (docs (docs (apply #'db.find
+                            ,*reply-col*
+                            qy
+                            option)) ))
+    (values docs
+            (doc-count *reply-col* :sel qy))))
+
+(defun find-sort-replys (query field asc &key (skip 0) (limit 0))
+  "sort reply from database."
+  (let* ((qy (if query
+                 (apply #'kv (loop for (k v) in query
+                                collect (kv k v)))
+                 :all) )
+         (docs (docs (db.sort *reply-col* qy
+                             :field field :asc asc
+                             :skip skip :limit limit ))))
+    (values docs
+            (doc-count *reply-col* :sel qy))))
+
+#+END_SRC

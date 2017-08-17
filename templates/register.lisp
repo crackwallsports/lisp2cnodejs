@@ -47,27 +47,6 @@
 (defmacro register-page-mac ()
   `(html-template
     (layout-template)
-    ;; ,(setf *args*
-    ;;        '(:title
-    ;;          "注册"
-    ;;          :links
-    ;;          `(,(getf *web-links* :bs-css)
-    ;;            ,(getf *web-links* :main-css))
-    ;;          :head-rest
-    ;;          `((style ()
-    ;;             ,(->css
-    ;;               '((".navbar" (:border-radius "0"))
-    ;;                 (".navbar-brand" (:padding "0px 20px")
-    ;;                  (img (:width "120px"
-    ;;                               :height "100%")))
-    ;;                 (".breadcrumb" (:padding 0
-    ;;                                 :margin 0))))))
-    ;;          :content `(,@(register-html-content))
-    ;;          :scripts
-    ;;          `(,(getf *web-links* :jq-js)
-    ;;            ,(getf *web-links* :bs-js))
-    ;;          :error "？？？？？？？？？"
-    ;;          :success "!!!!!!!!"))
     ,(merge-args
       *args*
       `(:title
@@ -76,14 +55,7 @@
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `((style ()
-                 ,(->css
-                   '((".navbar" (:border-radius "0"))
-                     (".navbar-brand" (:padding "0px 20px")
-                      (img (:width "120px"
-                                   :height "100%")))
-                     (".breadcrumb" (:padding 0
-                                     :margin 0))))))
+        `()
         :content `(,@(register-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
