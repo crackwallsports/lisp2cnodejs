@@ -130,7 +130,7 @@
 (defroute "/"  (&key (|tab| "all") (|page| "1"))
   (let* ((int (parse-integer |page|))
         (page (if (> int 0) int 1))
-        (count 1))
+        (count 10))
     (multiple-value-bind (topics allcount)
         (find-sort-topic (if (string/= |tab| "all") `(("tab" ,|tab|)))
                          "insertTime"
@@ -152,6 +152,24 @@
   (setf (gethash :user *session*) nil)
   (redirect "/"))
 #+END_SRC
+** Topic-detail : /topic/:tid
+#+BEGIN_SRC lisp :tangle src/web.lisp
+;; GET /topic/:tid
+(defroute "/topic/:tid" (&key (tid ""))
+  (format nil "~a" tid)
+  (let ((topics (find-topic-by-id tid)))
+  
+    ;; reply
+
+    ;; Render
+    (lisp-render "topic-detail"
+                 `(:user ,(gethash :user *session*)
+                         :topics ,(first (topic-docs->hts topics))
+                         ;; :count ,count :replys ,replys
+                         )))
+  ) 
+#+END_SRC
+
 
 ** ? logined
 #+BEGIN_SRC lisp :tangle src/web.lisp
@@ -223,16 +241,15 @@
   (setf (response-status *response*) 422)
   (lisp-render "register" `(:error ,msg)))
 #+END_SRC
-** Topic : /topic
-*** /create
-**** GET
+** Topic-create : /topic/create
+*** GET
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; GET /topic/create
 (defroute "/topic/create" ()
   (lisp-render "topic-create" `(:user ,(gethash :user *session*))))
 #+END_SRC
 
-**** POST
+*** POST
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; POST /topic/create
 (defroute ("/topic/create" :method :POST) (&key |title| |content| |tab|)
@@ -401,9 +418,24 @@
 *** Footer
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
 #+END_SRC
+*** Helper
+**** Date
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+(defun human-date (date)
+  (and date
+       (multiple-value-bind
+             (second minute hour date month year)
+           (decode-universal-time date)
+         (format nil "~4D.~2,'0D.~2,'0D ~2,'0D:~2,'0D:~2,'0D"
+                 year
+                 month
+                 date
+                 hour
+                 minute
+                 second))))
+#+END_SRC
 
 ** ---
-
 ** Index
 #+BEGIN_SRC lisp :tangle templates/index.lisp
 (in-package :lisp2cnodejs.view)
@@ -412,17 +444,6 @@
 (defparameter *topics* (getf *args* :topics))
 
 (defun to-n (d &optional (n 0)) (if (< d n) n d))
-(defun human-date (date)
-  (multiple-value-bind
-          (second minute hour date month year)
-        (decode-universal-time date)
-      (format nil "~4D.~2,'0D.~2,'0D ~2,'0D:~2,'0D:~2,'0D"
-              year
-              month
-              date
-              hour
-              minute
-              second)))
 
 (defun topic-list ()
   (loop for i in *topics*
@@ -491,9 +512,7 @@
                 (bs-pagination
                  `(,@pn))
                 ;; (format nil "tab=~a page=~a pc=~a" tab page pc )
-                )
-             
-             )))))
+                ))))))
 
 (defun index-html-content ()
   `(,(bs-container
@@ -509,12 +528,19 @@
     ,(merge-args
       ,*args*
       `(:title
-        "Login"
+        "首页"
         :links
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `()
+        `((style ()
+                 ,(->css
+                   '((".navbar" (:border-radius "0")
+                      (".navbar-brand" (:padding "0px 20px")
+                       (img (:width "120px"
+                                    :height "100%"))))
+                     (".breadcrumb" (:padding 0
+                                     :margin 0))))))
         :content `(,@(index-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
@@ -792,6 +818,62 @@
 (defun topic-create-page ()
   (topic-create-page-mac))
   #+END_SRC
+*** Detail
+#+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
+(in-package :lisp2cnodejs.view)
+(load "shared")
+
+(defparameter *topics* (getf *args* :topics))
+
+(defun detail-main-content ()
+  `(div (:id "content")
+        ,(bs-panel
+          :style "default"
+          :header `(((span (:class "topic-full-title")
+                           ,(gethash "title" *topics*))
+                     (div (:class "changes")
+                          (span ()
+                                "作者: "
+                                ,(gethash "username" *topics*))
+                          (span ()
+                                "发布时间: "
+                                ,(human-date (gethash "insertTime" *topics*))))))
+          :body `((;; Content
+                   (div (:class "topic-content")
+                        ;; Maybe markdown
+                        ,(gethash "content" *topics*))
+                   
+                   ;; Reply
+                   )))))
+
+(defun detail-html-content ()
+  `(,(bs-container
+      `(,(bs-row-col
+          `((9 (,(detail-main-content)))
+            (3 (,(main-sidebar))))
+          :w '("md")))
+      :fluid t)))
+
+(defmacro topic-detail-page-mac ()
+  `(html-template
+    (layout-template)
+    ,(merge-args
+      ,*args*
+      `(:title
+        "Login"
+        :links
+        `(,(getf *web-links* :bs-css)
+           ,(getf *web-links* :main-css))
+        :head-rest
+        `()
+        :content `(,@(detail-html-content))
+        :scripts
+        `(,(getf *web-links* :jq-js)
+           ,(getf *web-links* :bs-js))))))
+
+(defun topic-detail-page ()
+  (topic-detail-page-mac))
+  #+END_SRC
   
 
 * Model
@@ -863,30 +945,56 @@
         (values nil nil))))
 #+END_SRC
 ** MongoDB
+- :tangle src/model.lisp
+
+*** Base
 #+BEGIN_SRC lisp :tangle src/model.lisp
 (in-package :cl-user)
 (defpackage lisp2cnodejs.model
   (:use :cl :cl-mongo :cl-mongo-id)
+  (:import-from :cl-mongo
+                :make-bson-oid)
   (:export :find-user
            :add-user
            :auth-user
            :add-topic
            :find-topic
            :find-sort-topic
+           :find-topic-by-id
            :topic-docs->hts))
 (in-package :lisp2cnodejs.model)
+#+END_SRC
 
+*** Database
+#+BEGIN_SRC lisp :tangle src/model.lisp
 ;; Database
 (db.use "node-club")
-
-;; Collection
-(defparameter *user-col* "user")
-(defparameter *topic-col* "topic") 
-
+#+END_SRC
+*** Count
+#+BEGIN_SRC lisp :tangle src/model.lisp
 ;; Count
 (defun doc-count (col &key (sel :all))
   (first (get-element "n" (docs (db.count col sel)))))
+#+END_SRC
 
+*** User Collection
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; User
+(defparameter *user-col* "user")
+#+END_SRC
+
+**** Add
+#+BEGIN_SRC lisp :tangle src/model.lisp
+
+#+END_SRC
+
+**** Find
+#+BEGIN_SRC lisp :tangle src/model.lisp
+
+#+END_SRC
+
+**** Auth
+#+BEGIN_SRC lisp :tangle src/model.lisp
 ;; User
 (defun add-user (uname pwd email)
   "add user to database."
@@ -922,8 +1030,35 @@
          uname)
         (values nil nil))))
 
+#+END_SRC
 
+*** Topic Collection
+#+BEGIN_SRC lisp :tangle src/model.lisp
 ;; Topic
+(defparameter *topic-col* "topic")
+#+END_SRC
+
+**** Helper
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; Help
+(defun topic-docs->hts (docs)
+  (let (hts)
+    (loop for i in docs
+       do (let ((ht (make-hash-table :test 'equal)))
+            (setf (gethash "id" ht)  (oid-str (doc-id i)))
+            (setf (gethash "title" ht) (get-element "title" i))
+            (setf (gethash "content" ht) (get-element "content" i))
+            (setf (gethash "tab" ht) (get-element "tab" i))
+            (setf (gethash "username" ht) (get-element "username" i))
+            (setf (gethash "insertTime" ht) (get-element "insertTime" i))
+            (push ht hts)))
+    (nreverse hts)))
+
+#+END_SRC
+
+**** Add
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; Add
 (defun add-topic (uname tab title content date)
   "add topic to database."
   (db.insert *topic-col* ($ ($ "title" title)
@@ -931,8 +1066,10 @@
                            ($ "tab" tab)
                            ($ "username" uname)
                            ($ "insertTime" date))))
+#+END_SRC
 
-
+**** Find
+#+BEGIN_SRC lisp :tangle src/model.lisp
 (defun find-topic (query &optional option)
   "find topic from database."
   (let* ((qy (if query
@@ -958,22 +1095,9 @@
     (values docs
             (doc-count *topic-col* :sel qy))))
 
-
-
-
-;; Help
-(defun topic-docs->hts (docs)
-  (let (hts)
-    (loop for i in docs
-       do (let ((ht (make-hash-table :test 'equal)))
-            (setf (gethash "id" ht)  (oid-str (doc-id i)))
-            (setf (gethash "title" ht) (get-element "title" i))
-            (setf (gethash "content" ht) (get-element "content" i))
-            (setf (gethash "tab" ht) (get-element "tab" i))
-            (setf (gethash "username" ht) (get-element "username" i))
-            (setf (gethash "insertTime" ht) (get-element "insertTime" i))
-            (push ht hts)))
-    (nreverse hts)))
+(defun find-topic-by-id (id)
+  (let ((oid (make-bson-oid :oid (oid id))))
+    (docs (db.find *topic-col* (kv "_id" oid)))))
 
 
 #+END_SRC

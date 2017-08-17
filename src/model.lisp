@@ -1,25 +1,31 @@
 (in-package :cl-user)
 (defpackage lisp2cnodejs.model
   (:use :cl :cl-mongo :cl-mongo-id)
+  (:import-from :cl-mongo
+                :make-bson-oid)
   (:export :find-user
            :add-user
            :auth-user
            :add-topic
            :find-topic
            :find-sort-topic
+           :find-topic-by-id
            :topic-docs->hts))
 (in-package :lisp2cnodejs.model)
 
 ;; Database
 (db.use "node-club")
 
-;; Collection
-(defparameter *user-col* "user")
-(defparameter *topic-col* "topic") 
-
 ;; Count
 (defun doc-count (col &key (sel :all))
   (first (get-element "n" (docs (db.count col sel)))))
+
+;; User
+(defparameter *user-col* "user")
+
+
+
+
 
 ;; User
 (defun add-user (uname pwd email)
@@ -56,8 +62,24 @@
          uname)
         (values nil nil))))
 
-
 ;; Topic
+(defparameter *topic-col* "topic")
+
+;; Help
+(defun topic-docs->hts (docs)
+  (let (hts)
+    (loop for i in docs
+       do (let ((ht (make-hash-table :test 'equal)))
+            (setf (gethash "id" ht)  (oid-str (doc-id i)))
+            (setf (gethash "title" ht) (get-element "title" i))
+            (setf (gethash "content" ht) (get-element "content" i))
+            (setf (gethash "tab" ht) (get-element "tab" i))
+            (setf (gethash "username" ht) (get-element "username" i))
+            (setf (gethash "insertTime" ht) (get-element "insertTime" i))
+            (push ht hts)))
+    (nreverse hts)))
+
+;; Add
 (defun add-topic (uname tab title content date)
   "add topic to database."
   (db.insert *topic-col* ($ ($ "title" title)
@@ -65,7 +87,6 @@
                            ($ "tab" tab)
                            ($ "username" uname)
                            ($ "insertTime" date))))
-
 
 (defun find-topic (query &optional option)
   "find topic from database."
@@ -92,19 +113,6 @@
     (values docs
             (doc-count *topic-col* :sel qy))))
 
-
-
-
-;; Help
-(defun topic-docs->hts (docs)
-  (let (hts)
-    (loop for i in docs
-       do (let ((ht (make-hash-table :test 'equal)))
-            (setf (gethash "id" ht)  (oid-str (doc-id i)))
-            (setf (gethash "title" ht) (get-element "title" i))
-            (setf (gethash "content" ht) (get-element "content" i))
-            (setf (gethash "tab" ht) (get-element "tab" i))
-            (setf (gethash "username" ht) (get-element "username" i))
-            (setf (gethash "insertTime" ht) (get-element "insertTime" i))
-            (push ht hts)))
-    (nreverse hts)))
+(defun find-topic-by-id (id)
+  (let ((oid (make-bson-oid :oid (oid id))))
+    (docs (db.find *topic-col* (kv "_id" oid)))))

@@ -93,3 +93,16 @@
                    ,@buttons))))
 
 
+
+(defun human-date (date)
+  (and date
+       (multiple-value-bind
+             (second minute hour date month year)
+           (decode-universal-time date)
+         (format nil "~4D.~2,'0D.~2,'0D ~2,'0D:~2,'0D:~2,'0D"
+                 year
+                 month
+                 date
+                 hour
+                 minute
+                 second))))

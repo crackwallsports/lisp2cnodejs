@@ -39,7 +39,7 @@
 (defroute "/"  (&key (|tab| "all") (|page| "1"))
   (let* ((int (parse-integer |page|))
         (page (if (> int 0) int 1))
-        (count 1))
+        (count 10))
     (multiple-value-bind (topics allcount)
         (find-sort-topic (if (string/= |tab| "all") `(("tab" ,|tab|)))
                          "insertTime"
@@ -57,6 +57,21 @@
 (defroute "/logout" ()
   (setf (gethash :user *session*) nil)
   (redirect "/"))
+
+;; GET /topic/:tid
+(defroute "/topic/:tid" (&key (tid ""))
+  (format nil "~a" tid)
+  (let ((topics (find-topic-by-id tid)))
+  
+    ;; reply
+
+    ;; Render
+    (lisp-render "topic-detail"
+                 `(:user ,(gethash :user *session*)
+                         :topics ,(first (topic-docs->hts topics))
+                         ;; :count ,count :replys ,replys
+                         )))
+  )
 
 ;; /login | /register
 (defroute ("/(login)|(register)" :regexp t :method :ANY) ()

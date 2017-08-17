@@ -4,17 +4,6 @@
 (defparameter *topics* (getf *args* :topics))
 
 (defun to-n (d &optional (n 0)) (if (< d n) n d))
-(defun human-date (date)
-  (multiple-value-bind
-          (second minute hour date month year)
-        (decode-universal-time date)
-      (format nil "~4D.~2,'0D.~2,'0D ~2,'0D:~2,'0D:~2,'0D"
-              year
-              month
-              date
-              hour
-              minute
-              second)))
 
 (defun topic-list ()
   (loop for i in *topics*
@@ -83,9 +72,7 @@
                 (bs-pagination
                  `(,@pn))
                 ;; (format nil "tab=~a page=~a pc=~a" tab page pc )
-                )
-             
-             )))))
+                ))))))
 
 (defun index-html-content ()
   `(,(bs-container
@@ -101,12 +88,19 @@
     ,(merge-args
       *args*
       `(:title
-        "Login"
+        "首页"
         :links
         `(,(getf *web-links* :bs-css)
            ,(getf *web-links* :main-css))
         :head-rest
-        `()
+        `((style ()
+                 ,(->css
+                   '((".navbar" (:border-radius "0")
+                      (".navbar-brand" (:padding "0px 20px")
+                       (img (:width "120px"
+                                    :height "100%"))))
+                     (".breadcrumb" (:padding 0
+                                     :margin 0))))))
         :content `(,@(index-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
