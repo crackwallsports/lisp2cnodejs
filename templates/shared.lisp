@@ -15,7 +15,9 @@
                    ,@head-rest)
              (body ()
                    ,(header-navbar)
-                   ,@content ,@scripts))))
+                   ,@content
+                   ,(site-footer)
+                   ,@scripts))))
 
 (defun get-resource (str) 
   str 
@@ -99,7 +101,10 @@
               (div (:class "col-sm-offset-4 col-sm-6")
                    ,@buttons))))
 
-
+(defun site-footer ()
+  `(footer (:class "site-footer")
+           (p () "学习测试 纯粹娱乐")
+           (p () "Copyright (c) 2017 Xt3")))
 
 (defun human-date (date)
   (and date

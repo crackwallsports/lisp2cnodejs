@@ -84,18 +84,23 @@
    (body (:line-height "1.8"))
    (a (:text-decoration "none"))
    ("ul, li" (:list-style "none"))
+   
    ;; 
    (".navbar" (:border-radius "0")
-      (".navbar-brand" (:padding "0px 20px")
-       (img (:width "120px"
-                    :height "100%"))))
+              (".navbar-brand" (:padding "0px 20px")
+                               (img (:width "120px"
+                                            :height "100%"))))
    (".breadcrumb" (:padding 0
-                     :margin 0))
+                            :margin 0))
+   ;; Site Footer
+   (".site-footer" (:padding "3rem 0" :height "130px" :width "100%"
+                             :text-align "center"
+                             :color "#bbc7cc" :background-color "#f9f9f9"
+                             :font-size "1.6rem" :line-height "1.6em"))
    ))
 #+END_SRC
 
 * JS
-
 ** static/js/main.js
 #+BEGIN_SRC lisp :tangle src/js.lisp
 ;; Package
@@ -103,15 +108,7 @@
 (defpackage lisp2cnodejs.js
   (:use :cl :xt3.web.base :parenscript)
   (:import-from :lisp2cnodejs.config
-                :*static-directory*)
-  ;; (:import-from 
-  ;;               :ps
-  ;;               :ps*
-  ;;               :chain
-  ;;               :create
-  ;;               :var
-  ;;               :)
-  )
+                :*static-directory*))
 (in-package :lisp2cnodejs.js)
 
 (->file
@@ -209,7 +206,6 @@
   (setf (gethash :user *session*) nil)
   (redirect "/"))
 #+END_SRC
-
 
 ** ? logined
 #+BEGIN_SRC lisp :tangle src/web.lisp
@@ -379,7 +375,6 @@
   #+END_SRC
   
 ** Shared
-
 *** In-package
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
 (in-package :lisp2cnodejs.view)
@@ -401,7 +396,9 @@
                    ,@head-rest)
              (body ()
                    ,(header-navbar)
-                   ,@content ,@scripts))))
+                   ,@content
+                   ,(site-footer)
+                   ,@scripts))))
 #+END_SRC
 *** Resource
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
@@ -497,6 +494,10 @@
 #+END_SRC
 *** Footer
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
+(defun site-footer ()
+  `(footer (:class "site-footer")
+           (p () "学习测试 纯粹娱乐")
+           (p () "Copyright (c) 2017 Xt3")))
 #+END_SRC
 *** Helper
 **** Date
@@ -778,7 +779,7 @@
               (span () "选择板块:")
               (select (:name "tab" :id "tab-value")
                 ,@(loop for i in board-data
-                     and c = 0 then (1+ c)
+                     and c = 1 then (1+ c)
                      collect
                        `(option (:value ,#?"tab${c}") ,i))))
          
@@ -822,7 +823,7 @@
                     ;; Panel
                     ,(create-panel
                       "/topic/create"
-                      '("板块0" "板块1")))))))
+                      '("精华" "分享")))))))
 
 (defun create-html-content ()
   `(,(bs-container
@@ -877,7 +878,7 @@
                    (div (:class "markdown_in_editor")
                         (textarea (:class "editor"
                                           :name "content"
-                                          :id ""
+                                          :id "md-editor"
                                           :cols "30"
                                           :rows "10")))))
          (div (:class "form-group editor_buttons")
@@ -908,7 +909,7 @@
                                ,(human-date (gethash "insertTime" reply)))
                          (div (:class "reply-content")
                               ;; ? markdown
-                              ,(gethash "content" reply))))))))
+                              ,(markdown:parse (gethash "content" reply)))))))))
 
 (defun detail-main-content ()
   `(div (:id "content")
@@ -947,16 +948,20 @@
     ,(merge-args
       ,*args*
       `(:title
-        "Login"
+        "主题详情"
         :links
         `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
+           ,(getf *web-links* :main-css)
+           ,(getf *web-links* :md-editor-css))
         :head-rest
         `()
         :content `(,@(detail-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
+           ,(getf *web-links* :bs-js)
+           ,(getf *web-links* :md-editor-js)
+           (script ()
+                   "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))))
 
 (defun topic-detail-page ()
   (topic-detail-page-mac))

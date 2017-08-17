@@ -29,3 +29,13 @@ ul, li {
   padding: 0;
   margin: 0
 }
+.site-footer {
+  padding: 3rem 0;
+  height: 130px;
+  width: 100%;
+  text-align: center;
+  color: #bbc7cc;
+  background-color: #f9f9f9;
+  font-size: 1.6rem;
+  line-height: 1.6em
+}

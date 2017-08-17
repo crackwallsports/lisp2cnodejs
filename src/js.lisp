@@ -3,15 +3,7 @@
 (defpackage lisp2cnodejs.js
   (:use :cl :xt3.web.base :parenscript)
   (:import-from :lisp2cnodejs.config
-                :*static-directory*)
-  ;; (:import-from 
-  ;;               :ps
-  ;;               :ps*
-  ;;               :chain
-  ;;               :create
-  ;;               :var
-  ;;               :)
-  )
+                :*static-directory*))
 (in-package :lisp2cnodejs.js)
 
 (->file

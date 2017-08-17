@@ -17,7 +17,7 @@
                    (div (:class "markdown_in_editor")
                         (textarea (:class "editor"
                                           :name "content"
-                                          :id ""
+                                          :id "md-editor"
                                           :cols "30"
                                           :rows "10")))))
          (div (:class "form-group editor_buttons")
@@ -48,7 +48,7 @@
                                ,(human-date (gethash "insertTime" reply)))
                          (div (:class "reply-content")
                               ;; ? markdown
-                              ,(gethash "content" reply))))))))
+                              ,(markdown:parse (gethash "content" reply)))))))))
 
 (defun detail-main-content ()
   `(div (:id "content")
@@ -87,16 +87,20 @@
     ,(merge-args
       *args*
       `(:title
-        "Login"
+        "主题详情"
         :links
         `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
+           ,(getf *web-links* :main-css)
+           ,(getf *web-links* :md-editor-css))
         :head-rest
         `()
         :content `(,@(detail-html-content))
         :scripts
         `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
+           ,(getf *web-links* :bs-js)
+           ,(getf *web-links* :md-editor-js)
+           (script ()
+                   "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))))
 
 (defun topic-detail-page ()
   (topic-detail-page-mac))

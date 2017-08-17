@@ -12,7 +12,7 @@
               (span () "选择板块:")
               (select (:name "tab" :id "tab-value")
                 ,@(loop for i in board-data
-                     and c = 0 then (1+ c)
+                     and c = 1 then (1+ c)
                      collect
                        `(option (:value ,#?"tab${c}") ,i))))
          
@@ -56,7 +56,7 @@
                     ;; Panel
                     ,(create-panel
                       "/topic/create"
-                      '("板块0" "板块1")))))))
+                      '("精华" "分享")))))))
 
 (defun create-html-content ()
   `(,(bs-container
