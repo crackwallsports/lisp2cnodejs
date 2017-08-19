@@ -1,24 +1,16 @@
 (in-package :lisp2cnodejs.view)
 (my-load "shared")
 
-(defun register-main-content ()
+(defun register-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `((,(bs-breadcrumb
                        '((("首页") :href "/")
                          (("注册") :class "active")))))
-          :body `((
-                   ;; Error | Success
-                   ,(let ((err (getf *args* :error))
-                          (suc (getf *args* :success)))
-                      (cond
-                        (err `(div (:class "alert alert-danger")
-                                   (strong () ,err)))
-                        (suc `(div (:class "alert alert-success")
-                                   (strong () ,suc)))
-                        ;; (format nil "~A" *args*)
-                        (t "")))
+          :body `((;; Error | Success
+                   ,(error-or-success (getf args :error)
+                                      (getf args :success))
                     
                     ;; Panel
                     ,(reg-or-login-panel
@@ -35,7 +27,7 @@
                                    :style "info")))))))))
 
 
-(defun register-html-content ()
+(defun register-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
           `((9 (,(register-main-content)))
@@ -43,22 +35,18 @@
           :w '("md")))
       :fluid t)))
 
-(defmacro register-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      *args*
-      `(:title
-        "注册"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
-        :head-rest
-        `()
-        :content `(,@(register-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
-
-(defun register-page ()
-  (register-page-mac))
+(defun register-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "注册")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css))
+   :head-rest
+   `()
+   :content
+   (register-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js))))

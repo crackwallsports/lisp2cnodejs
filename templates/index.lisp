@@ -1,12 +1,10 @@
 (in-package :lisp2cnodejs.view)
 (my-load "shared")
 
-(defparameter *topics* (getf *args* :topics))
+(defun to-n (d &optional (n 0) (side #'<)) (if (funcall side d n) n d))
 
-(defun to-n (d &optional (n 0)) (if (< d n) n d))
-
-(defun topic-list ()
-  (loop for i in *topics*
+(defun topic-list (topics)
+  (loop for i in topics
      collect
        `(div (:class "cell")
              (span (:class "user-name pull-left")
@@ -20,7 +18,7 @@
                                             (gethash "id" i)))
                      ,(gethash "title" i))))))
 
-(defun index-main-content ()
+(defun index-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
@@ -42,20 +40,20 @@
           `((
              ;; Topic List
              (div (:class "topic-list")
-                  ,@(topic-list))
+                  ,@(topic-list (getf args :topics)))
 
              ;; Pagination
-             ,(let* ((tab (getf *args* :tab))
-                     (page (getf *args* :page))
-                     (pc (getf *args* :pcount))
+             ,(let* ((tab (getf args :tab))
+                     (page (getf args :page))
+                     (pc (getf args :pcount))
                      (pn (remove-if
                           #'null
-                          `(,(if (> page 10)
+                          `(,(if (> page 4)
                                  `(("<<")
                                    :href ,(format nil "/?tab=~A&page=1" tab)))
                              ,(if (> page 4)
                                   `(("...")
-                                    :href ,(format nil "/?tab=~A&page=1" tab)))
+                                    :href ,(format nil "/?tab=~A&page=~A" tab (to-n (- page 3) 1))))
                              ,@(loop for i from (to-n (- page 3) 1) below page
                                   collect 
                                     `((,i)
@@ -67,40 +65,34 @@
                                       :href ,(format nil "/?tab=~A&page=~A" tab i)))
                              ,(if (< (+ page 3) pc)
                                   `(("...")
-                                    :href ,(format nil "/?tab=~A&page=~A" tab pc)))
-                             ,(if (> page 10)
+                                    :href ,(format nil "/?tab=~A&page=~A" tab (to-n (+ page 3) pc #'>))))
+                             ,(if (and (> page 5) (/= page pc))
                                   `((">>")
                                     :href ,(format nil "/?tab=~A&page=~A" tab pc)))))))
-                
-                (bs-pagination
-                 `(,@pn))
                 ;; (format nil "tab=~a page=~a pc=~a" tab page pc )
-                ))))))
+                (bs-pagination
+                 `(,@pn))))))))
 
-(defun index-html-content ()
+(defun index-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(index-main-content)))
+          `((9 (,(index-main-content args)))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
 
-(defmacro index-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      *args*
-      `(:title
-        "首页"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
-        :head-rest
-        `()
-        :content `(,@(index-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
-
-(defun index-page ()
-  (index-page-mac))
+(defun index-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "首页")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css))
+   :head-rest
+   `()
+   :content
+   (index-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js))))

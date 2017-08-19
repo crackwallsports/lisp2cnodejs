@@ -36,56 +36,46 @@
                        :type "submit"
                        :style "primary"))))
 
-(defun create-main-content ()
+(defun create-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `((,(bs-breadcrumb
                        '((("首页") :href "/")
                          (("发表话题") :class "active")))))
-          :body `((
-                   ;; Error | Success
-                   ,(let ((err (getf *args* :error))
-                          (suc (getf *args* :success)))
-                      (cond
-                        (err `(div (:class "alert alert-danger")
-                                   (strong () ,err)))
-                        (suc `(div (:class "alert alert-success")
-                                   (strong () ,suc)))
-                        (t "")))
+          :body `((;; Error | Success
+                   ,(error-or-success (getf args :error)
+                                      (getf args :success))
+                   
                     ;; Panel
                     ,(create-panel
                       "/topic/create"
                       '("精华" "分享")))))))
 
-(defun create-html-content ()
+(defun create-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(create-main-content)))
+          `((9 (,(create-main-content args)))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
 
-(defmacro topic-create-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      *args*
-      `(:title
-        "发表话题"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css)
-           ,(getf *web-links* :md-editor-css))
-        :head-rest
-        `()
-        :content `(,@(create-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js)
-           ,(getf *web-links* :md-editor-js)
-           (script ()
-                   "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))))
-
-(defun topic-create-page ()
-  (topic-create-page-mac))
+(defun topic-create-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "发表话题")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css)
+      ,(getf *web-links* :md-editor-css))
+   :head-rest
+   `()
+   :content
+   (create-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js)
+      ,(getf *web-links* :md-editor-js)
+      (script ()
+              "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))

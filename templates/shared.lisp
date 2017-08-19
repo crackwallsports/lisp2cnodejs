@@ -1,23 +1,22 @@
 (in-package :lisp2cnodejs.view)
 
-;; Layout
-(defmacro layout-template ()
-  ``(,,(doctype)
-       (html (:lang "en")
-             (head ()
-                   (meta (:charset "utf-8"))
-                   (meta (:name "viewport"
-                                :content "width=device-width, initial-scale=1, shrink-to-fit=no"))
-                   (meta (:name "description" :content "?"))
-                   (meta (:name "author" :content "Xt3"))
-                   (title nil ,title)
-                   ,@links
-                   ,@head-rest)
-             (body ()
-                   ,(header-navbar)
-                   ,@content
-                   ,(site-footer)
-                   ,@scripts))))
+(defun layout-template (args &key (title "标题") links head-rest content scripts)
+  `(,(doctype)
+     (html (:lang "en")
+           (head ()
+                 (meta (:charset "utf-8"))
+                 (meta (:name "viewport"
+                              :content "width=device-width, initial-scale=1, shrink-to-fit=no"))
+                 (meta (:name "description" :content "?"))
+                 (meta (:name "author" :content "Xt3"))
+                 (title nil ,title)
+                 ,@links
+                 ,@head-rest)
+           (body ()
+                 ,(header-navbar args)
+                 ,@content
+                 ,(site-footer)
+                 ,@scripts))))
 
 (defun get-resource (str) 
   str 
@@ -58,7 +57,7 @@
                    (i (:class "glyphicon glyphicon-search")))
          (input (:class "form-control" :id "search" :type "text" :name "search")))))
 
-(defun header-navbar ()
+(defun header-navbar (args)
   (bs-navbar
    `((div (:class "collapse navbar-collapse" :id "myNavbar")
           ,(bs-nav
@@ -66,7 +65,7 @@
               ("新手入门" :href "/getstart")
               ("API" :href "/api")
               ("关于" :href "/about")
-              ,@(if (getf *args* :user)
+              ,@(if (getf args :user)
                     '(("注销" :href "/logout"))
                     '(("注册" :href "/register")
                       ("登录" :href "/login"))))
@@ -105,6 +104,16 @@
   `(footer (:class "site-footer")
            (p () "学习测试 纯粹娱乐")
            (p () "Copyright (c) 2017 Xt3")))
+
+;; Error | Success
+(defun error-or-success (err suc)
+  (cond
+    (err `(div (:class "alert alert-danger")
+               (strong () ,err)))
+    (suc `(div (:class "alert alert-success")
+               (strong () ,suc)))
+    ;; (format nil "~A" *args*)
+    (t "")))
 
 (defun human-date (date)
   (and date

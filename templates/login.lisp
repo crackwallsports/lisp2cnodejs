@@ -1,23 +1,16 @@
 (in-package :lisp2cnodejs.view)
 (my-load "shared")
 
-(defun login-main-content ()
+(defun login-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `((,(bs-breadcrumb
                        '((("首页") :href "/")
                          (("登录") :class "active")))))
-          :body `((
-                   ;; Error | Success
-                   ,(let ((err (getf *args* :error))
-                          (suc (getf *args* :success)))
-                      (cond
-                        (err `(div (:class "alert alert-danger")
-                                   (strong () ,err)))
-                        (suc `(div (:class "alert alert-success")
-                                   (strong () ,suc)))
-                        (t "")))
+          :body `((;; Error | Success
+                   ,(error-or-success (getf args :error)
+                                      (getf args :success))
                     ;; Panel
                    ,(reg-or-login-panel
                       "/login"
@@ -29,30 +22,26 @@
                           (a (:href "#") "忘记密码?")))))))))
 
 
-(defun login-html-content ()
+(defun login-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(login-main-content)))
+          `((9 (,(login-main-content args)))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
 
-(defmacro login-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      *args*
-      `(:title
-        "登录"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
-        :head-rest
-        `()
-        :content `(,@(login-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
-
-(defun login-page ()
-  (login-page-mac))
+(defun login-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "登录")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css))
+   :head-rest
+   `()
+   :content
+   (login-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js))))

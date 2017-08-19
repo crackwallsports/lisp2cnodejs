@@ -19,7 +19,8 @@
 (in-package :lisp2cnodejs.model)
 
 ;; Database
-(db.use "node-club")
+(defparameter *my-database* "node-club")
+(db.use *my-database*)
 
 ;; Count
 (defun doc-count (col &key (sel :all))
@@ -105,18 +106,16 @@
 (defun find-sort-topics (query field asc &key (skip 0) (limit 0))
   "sort topic from database."
   (let ((cl-mongo::*mongo-registry* nil))
-    (cl-mongo:with-mongo-connection (:db "node-club")
+    (cl-mongo:with-mongo-connection (:db *my-database*)
       (let* ((qy (if query
                      (apply #'kv (loop for (k v) in query
                                     collect (kv k v)))
                      :all))
              (docs (docs (db.sort *topic-col* qy
                                   :field field :asc asc
-                                  :skip skip :limit limit))
-               ))
+                                  :skip skip :limit limit))))
         (values docs
-                0 ;; (doc-count *topic-col* :sel qy)
-                ))))
+                (doc-count *topic-col* :sel qy)))))
   
   )
 

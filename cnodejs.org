@@ -387,6 +387,7 @@
 (in-package :lisp2cnodejs.view)
 #+END_SRC
 *** Layout
+**** COMMENT Old
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
 ;; Layout
 (defmacro layout-template ()
@@ -406,6 +407,26 @@
                    ,@content
                    ,(site-footer)
                    ,@scripts))))
+#+END_SRC
+**** Beta
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+(defun layout-template (args &key (title "标题") links head-rest content scripts)
+  `(,(doctype)
+     (html (:lang "en")
+           (head ()
+                 (meta (:charset "utf-8"))
+                 (meta (:name "viewport"
+                              :content "width=device-width, initial-scale=1, shrink-to-fit=no"))
+                 (meta (:name "description" :content "?"))
+                 (meta (:name "author" :content "Xt3"))
+                 (title nil ,title)
+                 ,@links
+                 ,@head-rest)
+           (body ()
+                 ,(header-navbar args)
+                 ,@content
+                 ,(site-footer)
+                 ,@scripts))))
 #+END_SRC
 *** Resource
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
@@ -451,7 +472,7 @@
                    (i (:class "glyphicon glyphicon-search")))
          (input (:class "form-control" :id "search" :type "text" :name "search")))))
 
-(defun header-navbar ()
+(defun header-navbar (args)
   (bs-navbar
    `((div (:class "collapse navbar-collapse" :id "myNavbar")
           ,(bs-nav
@@ -459,7 +480,7 @@
               ("新手入门" :href "/getstart")
               ("API" :href "/api")
               ("关于" :href "/about")
-              ,@(if (getf *args* :user)
+              ,@(if (getf args :user)
                     '(("注销" :href "/logout"))
                     '(("注册" :href "/register")
                       ("登录" :href "/login"))))
@@ -499,12 +520,24 @@
               (div (:class "col-sm-offset-4 col-sm-6")
                    ,@buttons))))
 #+END_SRC
-*** Footer
+*** Error | Success
 #+BEGIN_SRC lisp :tangle templates/shared.lisp
 (defun site-footer ()
   `(footer (:class "site-footer")
            (p () "学习测试 纯粹娱乐")
            (p () "Copyright (c) 2017 Xt3")))
+#+END_SRC
+*** Footer
+#+BEGIN_SRC lisp :tangle templates/shared.lisp
+;; Error | Success
+(defun error-or-success (err suc)
+  (cond
+    (err `(div (:class "alert alert-danger")
+               (strong () ,err)))
+    (suc `(div (:class "alert alert-success")
+               (strong () ,suc)))
+    ;; (format nil "~A" *args*)
+    (t "")))
 #+END_SRC
 *** Helper
 **** Date
@@ -524,15 +557,13 @@
 (in-package :lisp2cnodejs.view)
 (my-load "shared")
 
-(defparameter *topics* (getf *args* :topics))
-
-(defun to-n (d &optional (n 0)) (if (< d n) n d))
+(defun to-n (d &optional (n 0) (side #'<)) (if (funcall side d n) n d))
 #+END_SRC
  
 *** Topic-list
 #+BEGIN_SRC lisp :tangle templates/index.lisp 
-(defun topic-list ()
-  (loop for i in *topics*
+(defun topic-list (topics)
+  (loop for i in topics
      collect
        `(div (:class "cell")
              (span (:class "user-name pull-left")
@@ -548,7 +579,7 @@
 #+END_SRC
 *** Content
 #+BEGIN_SRC lisp :tangle templates/index.lisp
-(defun index-main-content ()
+(defun index-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
@@ -570,20 +601,20 @@
           `((
              ;; Topic List
              (div (:class "topic-list")
-                  ,@(topic-list))
+                  ,@(topic-list (getf args :topics)))
 
              ;; Pagination
-             ,(let* ((tab (getf *args* :tab))
-                     (page (getf *args* :page))
-                     (pc (getf *args* :pcount))
+             ,(let* ((tab (getf args :tab))
+                     (page (getf args :page))
+                     (pc (getf args :pcount))
                      (pn (remove-if
                           #'null
-                          `(,(if (> page 10)
+                          `(,(if (> page 4)
                                  `(("<<")
                                    :href ,(format nil "/?tab=~A&page=1" tab)))
                              ,(if (> page 4)
                                   `(("...")
-                                    :href ,(format nil "/?tab=~A&page=1" tab)))
+                                    :href ,(format nil "/?tab=~A&page=~A" tab (to-n (- page 3) 1))))
                              ,@(loop for i from (to-n (- page 3) 1) below page
                                   collect 
                                     `((,i)
@@ -595,20 +626,18 @@
                                       :href ,(format nil "/?tab=~A&page=~A" tab i)))
                              ,(if (< (+ page 3) pc)
                                   `(("...")
-                                    :href ,(format nil "/?tab=~A&page=~A" tab pc)))
-                             ,(if (> page 10)
+                                    :href ,(format nil "/?tab=~A&page=~A" tab (to-n (+ page 3) pc #'>))))
+                             ,(if (and (> page 5) (/= page pc))
                                   `((">>")
                                     :href ,(format nil "/?tab=~A&page=~A" tab pc)))))))
-                
-                (bs-pagination
-                 `(,@pn))
                 ;; (format nil "tab=~a page=~a pc=~a" tab page pc )
-                ))))))
+                (bs-pagination
+                 `(,@pn))))))))
 
-(defun index-html-content ()
+(defun index-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(index-main-content)))
+          `((9 (,(index-main-content args)))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
@@ -616,25 +645,21 @@
 
 *** Page
 #+BEGIN_SRC lisp :tangle templates/index.lisp
-(defmacro index-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      ,*args*
-      `(:title
-        "首页"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
-        :head-rest
-        `()
-        :content `(,@(index-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
-
-(defun index-page ()
-  (index-page-mac))
+(defun index-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "首页")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css))
+   :head-rest
+   `()
+   :content
+   (index-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js))))
 #+END_SRC
 
 ** Login
@@ -645,23 +670,16 @@
 
 *** Content
 #+BEGIN_SRC lisp :tangle templates/login.lisp
-(defun login-main-content ()
+(defun login-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `((,(bs-breadcrumb
                        '((("首页") :href "/")
                          (("登录") :class "active")))))
-          :body `((
-                   ;; Error | Success
-                   ,(let ((err (getf *args* :error))
-                          (suc (getf *args* :success)))
-                      (cond
-                        (err `(div (:class "alert alert-danger")
-                                   (strong () ,err)))
-                        (suc `(div (:class "alert alert-success")
-                                   (strong () ,suc)))
-                        (t "")))
+          :body `((;; Error | Success
+                   ,(error-or-success (getf args :error)
+                                      (getf args :success))
                     ;; Panel
                    ,(reg-or-login-panel
                       "/login"
@@ -673,35 +691,31 @@
                           (a (:href "#") "忘记密码?")))))))))
 
 
-(defun login-html-content ()
+(defun login-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(login-main-content)))
+          `((9 (,(login-main-content args)))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
 #+END_SRC
 *** Page
 #+BEGIN_SRC lisp :tangle templates/login.lisp
-(defmacro login-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      ,*args*
-      `(:title
-        "登录"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
-        :head-rest
-        `()
-        :content `(,@(login-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
-
-(defun login-page ()
-  (login-page-mac))
+(defun login-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "登录")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css))
+   :head-rest
+   `()
+   :content
+   (login-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js))))
 #+END_SRC
 ** Register
 #+BEGIN_SRC lisp :tangle templates/register.lisp
@@ -710,24 +724,16 @@
 #+END_SRC
 *** Content
 #+BEGIN_SRC lisp :tangle templates/register.lisp
-(defun register-main-content ()
+(defun register-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `((,(bs-breadcrumb
                        '((("首页") :href "/")
                          (("注册") :class "active")))))
-          :body `((
-                   ;; Error | Success
-                   ,(let ((err (getf *args* :error))
-                          (suc (getf *args* :success)))
-                      (cond
-                        (err `(div (:class "alert alert-danger")
-                                   (strong () ,err)))
-                        (suc `(div (:class "alert alert-success")
-                                   (strong () ,suc)))
-                        ;; (format nil "~A" *args*)
-                        (t "")))
+          :body `((;; Error | Success
+                   ,(error-or-success (getf args :error)
+                                      (getf args :success))
                     
                     ;; Panel
                     ,(reg-or-login-panel
@@ -744,7 +750,7 @@
                                    :style "info")))))))))
 
 
-(defun register-html-content ()
+(defun register-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
           `((9 (,(register-main-content)))
@@ -754,25 +760,21 @@
 #+END_SRC
 *** Page
 #+BEGIN_SRC lisp :tangle templates/register.lisp
-(defmacro register-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      ,*args*
-      `(:title
-        "注册"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css))
-        :head-rest
-        `()
-        :content `(,@(register-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js))))))
-
-(defun register-page ()
-  (register-page-mac))
+(defun register-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "注册")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css))
+   :head-rest
+   `()
+   :content
+   (register-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js))))
 #+END_SRC
 ** ---
 ** Topic
@@ -822,82 +824,68 @@
 #+END_SRC
 **** Content
 #+BEGIN_SRC lisp :tangle templates/topic-create.lisp
-(defun create-main-content ()
+(defun create-main-content (args)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `((,(bs-breadcrumb
                        '((("首页") :href "/")
                          (("发表话题") :class "active")))))
-          :body `((
-                   ;; Error | Success
-                   ,(let ((err (getf *args* :error))
-                          (suc (getf *args* :success)))
-                      (cond
-                        (err `(div (:class "alert alert-danger")
-                                   (strong () ,err)))
-                        (suc `(div (:class "alert alert-success")
-                                   (strong () ,suc)))
-                        (t "")))
+          :body `((;; Error | Success
+                   ,(error-or-success (getf args :error)
+                                      (getf args :success))
+                   
                     ;; Panel
                     ,(create-panel
                       "/topic/create"
                       '("精华" "分享")))))))
 
-(defun create-html-content ()
+(defun create-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(create-main-content)))
+          `((9 (,(create-main-content args)))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
 #+END_SRC
 **** Page
 #+BEGIN_SRC lisp :tangle templates/topic-create.lisp
-(defmacro topic-create-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      ,*args*
-      `(:title
-        "发表话题"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css)
-           ,(getf *web-links* :md-editor-css))
-        :head-rest
-        `()
-        :content `(,@(create-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js)
-           ,(getf *web-links* :md-editor-js)
-           (script ()
-                   "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))))
-
-(defun topic-create-page ()
-  (topic-create-page-mac))
+(defun topic-create-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "发表话题")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css)
+      ,(getf *web-links* :md-editor-css))
+   :head-rest
+   `()
+   :content
+   (create-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js)
+      ,(getf *web-links* :md-editor-js)
+      (script ()
+              "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))
   #+END_SRC
 
 *** Detail
 #+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
 (in-package :lisp2cnodejs.view)
 (my-load "shared")
-
-(defparameter *topic* (getf *args* :topic))
 #+END_SRC
 
 **** Reply
 #+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
-(defparameter *replys* (getf *args* :replys))
-
-(defun reply-add-form (action)
+(defun reply-add-form (action id)
   `(form (:action ,action :method "post"
                   :class "form-horizontal"
                   :id "reply-add-form")
          (div (:class "form-group")
               (input (:name "tid" :type "hidden"
-                            :value ,(format nil "~A" (gethash "id" *topic*)) 
+                            :value ,(format nil "~A" id) 
                             :class "form-control input-sm")))
          (div (:class "form-group")
               (div (:class "markdown_editor in_editor")
@@ -912,21 +900,22 @@
                        :type "submit"
                        :style "primary"))))
 
-(defun reply-panel ()
+(defun reply-panel (topic)
   (bs-panel
    :style "default"
    :header `(((span () "添加回复")))
    :body `(( ;; Form + Editor
             ,(reply-add-form
-              "/reply/add")))))
+              "/reply/add"
+              (gethash "id" topic))))))
 
-(defun reply-list ()
+(defun reply-list (args)
   (bs-panel
    :style "default"
    :header `((span ()
-                   ,(getf *args* :count)
+                   ,(getf args :count)
                    "个回复"))
-   :body `((,@(loop for reply in *replys*
+   :body `((,@(loop for reply in (getf args :replys) 
                  collect
                    `(div (:class "cell")
                          (span (:class "reply-author pull-left")
@@ -941,62 +930,58 @@
 
 **** Content
 #+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
-(defun detail-main-content ()
+(defun detail-main-content (topic)
   `(div (:id "content")
         ,(bs-panel
           :style "default"
           :header `(((span (:class "topic-full-title")
-                           ,(gethash "title" *topic*))
+                           ,(gethash "title" topic))
                      (div (:class "changes")
                           (span ()
                                 "作者: "
-                                ,(gethash "username" *topic*))
+                                ,(gethash "username" topic))
                           (span ()
                                 "发布时间: "
-                                ,(human-date (gethash "insertTime" *topic*))))))
+                                ,(human-date (gethash "insertTime" topic))))))
           :body `(( ;; Content
                    (div (:class "topic-content")
                         ;; ? markdown
-                        ,(markdown:parse (gethash "content" *topic*))))))))
+                        ,(markdown:parse (gethash "content" topic))))))))
 
-(defun detail-html-content ()
+(defun detail-html-content (args)
   `(,(bs-container
       `(,(bs-row-col
-          `((9 (,(detail-main-content)
+          `((9 (,(detail-main-content (getf args :topic))
                  ;; Reply
-                 ,(if (plusp (getf *args* :count))
-                      (reply-list))
-                 ,(if (getf *args* :user)
-                      (reply-panel))))
+                 ,(if (plusp (getf args :count))
+                      (reply-list args))
+                 ,(if (getf args :user)
+                      (reply-panel (getf args :topic)))))
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
 #+END_SRC
 **** Page
 #+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
-(defmacro topic-detail-page-mac ()
-  `(html-template
-    (layout-template)
-    ,(merge-args
-      ,*args*
-      `(:title
-        "主题详情"
-        :links
-        `(,(getf *web-links* :bs-css)
-           ,(getf *web-links* :main-css)
-           ,(getf *web-links* :md-editor-css))
-        :head-rest
-        `()
-        :content `(,@(detail-html-content))
-        :scripts
-        `(,(getf *web-links* :jq-js)
-           ,(getf *web-links* :bs-js)
-           ,(getf *web-links* :md-editor-js)
-           (script ()
-                   "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))))
-
-(defun topic-detail-page ()
-  (topic-detail-page-mac))
+(defun topic-detail-page (args)
+  (layout-template
+   args
+   :title
+   (or (getf args :title) "主题详情")
+   :links
+   `(,(getf *web-links* :bs-css)
+      ,(getf *web-links* :main-css)
+      ,(getf *web-links* :md-editor-css))
+   :head-rest
+   `()
+   :content
+   (detail-html-content args)
+   :scripts
+   `(,(getf *web-links* :jq-js)
+      ,(getf *web-links* :bs-js)
+      ,(getf *web-links* :md-editor-js)
+      (script ()
+              "var simplemde = new SimpleMDE({ element: document.getElementById(\"md-editor\") });"))))
   #+END_SRC
   
 * Model

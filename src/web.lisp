@@ -40,27 +40,25 @@
 ;;   (lisp-render "index" `(:user ,(gethash :user *session*))))
 
 (defroute "/" (&key (|tab| "all") (|page| "1"))
-  "Hello?"
-  ;; (let* ((int (or (parse-integer |page|) 1))
-  ;;        (page (if (> int 0) int 1))
-  ;;        (count 10))
-  ;;   (multiple-value-bind (topics allcount)
-  ;;       (find-sort-topics (if (string/= |tab| "all") `(("tab" ,|tab|)))
-  ;;                         "insertTime"
-  ;;                         nil
-  ;;                         :skip (* (- page 1) count)
-  ;;                         :limit count)
-  ;;     ;; (format nil "tab=~a page=~a pc=~a" |tab| page allcount )
-  ;;     (lisp-render "index" `(:title ,(concat "首页 欢迎您"
-  ;;                                            (or (gethash :user *session*)
-  ;;                                                ""))
-  ;;                                   :user ,(gethash :user *session*)
-  ;;                                   :topics ,(topic-docs->hts topics)
-  ;;                                   :tab ,|tab|
-  ;;                                   :page ,page
-  ;;                                   :pcount ,(ceiling (/ (or allcount 0)
-  ;;                                                        count))))))
-  )
+  (let* ((int (or (parse-integer |page|) 1))
+         (page (if (> int 0) int 1))
+         (count 10))
+    (multiple-value-bind (topics allcount)
+        (find-sort-topics (if (string/= |tab| "all") `(("tab" ,|tab|)))
+                          "insertTime"
+                          nil
+                          :skip (* (- page 1) count)
+                          :limit count)
+      ;; (format nil "tab=~a page=~a pc=~a" |tab| page allcount )
+      (lisp-render "index" `(:title ,(concat "首页 欢迎您"
+                                             (or (gethash :user *session*)
+                                                 ""))
+                                    :user ,(gethash :user *session*)
+                                    :topics ,(topic-docs->hts topics)
+                                    :tab ,|tab|
+                                    :page ,page
+                                    :pcount ,(ceiling (/ (or allcount 0)
+                                                         count)))))))
 
 ;; GET /logout
 (defroute "/logout" ()

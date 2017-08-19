@@ -32,11 +32,11 @@
 ;;     (apply #'djula:render-template*
 ;;            template nil
 ;;            env)))
-
+   
 (defun render-json (object)
   (setf (getf (response-headers *response*) :content-type) "application/json")
   (encode-json object))
-
+  
 
 
 (defparameter *args* ())
@@ -52,8 +52,15 @@
       (load path))
     (setf (gethash path *template-registry*) t)))
 
+;; (defun lisp-render (path &optional args)
+;;   (setf *args* args)
+;;   (my-load path)
+;;   (->html
+;;    (funcall (intern (string-upcase #?"${path}-page") :lisp2cnodejs.view))))
+
 (defun lisp-render (path &optional args)
-  (setf *args* args)
   (my-load path)
   (->html
-   (funcall (intern (string-upcase #?"${path}-page") :lisp2cnodejs.view))))
+   (funcall (intern (string-upcase #?"${path}-page")
+                    :lisp2cnodejs.view)
+            args)))
