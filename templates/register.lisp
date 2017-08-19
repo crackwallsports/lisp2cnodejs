@@ -1,5 +1,5 @@
 (in-package :lisp2cnodejs.view)
-(load "shared")
+(my-load "shared")
 
 (defun register-main-content ()
   `(div (:id "content")
@@ -42,7 +42,6 @@
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
-
 
 (defmacro register-page-mac ()
   `(html-template

@@ -1,5 +1,5 @@
 (in-package :lisp2cnodejs.view)
-(load "shared")
+(my-load "shared")
 
 (defparameter *topics* (getf *args* :topics))
 

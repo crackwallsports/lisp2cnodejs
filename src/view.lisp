@@ -46,10 +46,14 @@
           (unless (null p)
             (setf (elt them (1+ p)) v))))
   them)
+(defun my-load (path)
+  (unless (gethash path *template-registry*)
+    (let ((*default-pathname-defaults* *template-directory*))
+      (load path))
+    (setf (gethash path *template-registry*) t)))
 
 (defun lisp-render (path &optional args)
-  (let ((*default-pathname-defaults* *template-directory*))
-    (setf *args* args)
-    (load path))
+  (setf *args* args)
+  (my-load path)
   (->html
    (funcall (intern (string-upcase #?"${path}-page") :lisp2cnodejs.view))))

@@ -23,6 +23,8 @@
 
 ;; 
 ;; Routing rules
+(interpol:enable-interpol-syntax)
+(cl-syntax:use-syntax :interpol)
 
 ;; Error pages
 (defmethod on-exception ((app <web>) code)
@@ -37,22 +39,28 @@
 ;; (defroute "/" ()
 ;;   (lisp-render "index" `(:user ,(gethash :user *session*))))
 
-(defroute "/"  (&key (|tab| "all") (|page| "1"))
-  (let* ((int (parse-integer |page|))
-        (page (if (> int 0) int 1))
-        (count 10))
-    (multiple-value-bind (topics allcount)
-        (find-sort-topics (if (string/= |tab| "all") `(("tab" ,|tab|)))
-                         "insertTime"
-                         t
-                         :skip (* (- page 1) count)
-                         :limit count)
-      ;; (format nil "tab=~a page=~a pc=~a" |tab| page allcount )
-      (lisp-render "index" `(:user ,(gethash :user *session*)
-                                   :topics ,(topic-docs->hts topics)
-                                   :tab ,|tab|
-                                   :page ,page
-                                   :pcount ,(ceiling (/ allcount count)))))))
+(defroute "/" (&key (|tab| "all") (|page| "1"))
+  "Hello?"
+  ;; (let* ((int (or (parse-integer |page|) 1))
+  ;;        (page (if (> int 0) int 1))
+  ;;        (count 10))
+  ;;   (multiple-value-bind (topics allcount)
+  ;;       (find-sort-topics (if (string/= |tab| "all") `(("tab" ,|tab|)))
+  ;;                         "insertTime"
+  ;;                         nil
+  ;;                         :skip (* (- page 1) count)
+  ;;                         :limit count)
+  ;;     ;; (format nil "tab=~a page=~a pc=~a" |tab| page allcount )
+  ;;     (lisp-render "index" `(:title ,(concat "首页 欢迎您"
+  ;;                                            (or (gethash :user *session*)
+  ;;                                                ""))
+  ;;                                   :user ,(gethash :user *session*)
+  ;;                                   :topics ,(topic-docs->hts topics)
+  ;;                                   :tab ,|tab|
+  ;;                                   :page ,page
+  ;;                                   :pcount ,(ceiling (/ (or allcount 0)
+  ;;                                                        count))))))
+  )
 
 ;; GET /logout
 (defroute "/logout" ()
@@ -130,15 +138,14 @@
                (list title content tab))
          (setf (response-status *response*) 422)
          (lisp-render "topic-create" '(:error "信息不完整!"
-                                        :user uname)))
-        (t
-         (add-topic uname
-                    tab
-                    title
-                    content
-                    (get-universal-time))
-         (lisp-render "topic-create" '(:success "话题发表成功!"
-                                        :user uname)))))))
+                                       :user uname)))
+        (t (add-topic uname
+                      tab
+                      title
+                      content
+                      (get-universal-time))
+           (lisp-render "topic-create" '(:success "话题发表成功!"
+                                         :user uname)))))))
 
 ;; GET /topic/:tid
 (defroute "/topic/:tid" (&key (tid ""))

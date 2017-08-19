@@ -3,7 +3,8 @@
   (:use :cl :cl-mongo :cl-mongo-id)
   (:import-from :cl-mongo
                 :make-bson-oid)
-  (:export :find-user
+  (:export :doc-count
+           :find-user
            :add-user
            :auth-user
            :add-topic
@@ -27,11 +28,7 @@
 ;; User
 (defparameter *user-col* "user")
 
-
-
-
-
-;; User
+;; Add
 (defun add-user (uname pwd email)
   "add user to database."
   (db.insert *user-col* ($ ($ "username" uname)
@@ -39,6 +36,7 @@
                               pwd)
                            ($ "email" email))))
 
+;; Find
 (defun find-username (uname)
   "lookup user by username."
   (docs (db.find *user-col* ($ "username" uname))))
@@ -55,6 +53,7 @@
                                 (list ($ "username" uname)
                                       ($ "email" email))))))
 
+;; Auth
 (defun auth-user (uname pwd)
   ;; (db.find *user-col* ($ ($ :username uname)
   ;;                   ($ :password pwd)))
@@ -74,7 +73,7 @@
   (let (hts)
     (loop for i in docs
        do (let ((ht (make-hash-table :test 'equal)))
-            (setf (gethash "id" ht)  (oid-str (doc-id i)))
+            (setf (gethash "id" ht) (oid-str (doc-id i)))
             (setf (gethash "title" ht) (get-element "title" i))
             (setf (gethash "content" ht) (get-element "content" i))
             (setf (gethash "tab" ht) (get-element "tab" i))
@@ -87,35 +86,39 @@
 (defun add-topic (uname tab title content date)
   "add topic to database."
   (db.insert *topic-col* ($ ($ "title" title)
-                           ($ "content" content)
-                           ($ "tab" tab)
-                           ($ "username" uname)
-                           ($ "insertTime" date))))
+                            ($ "content" content)
+                            ($ "tab" tab)
+                            ($ "username" uname)
+                            ($ "insertTime" date))))
 
+;; Find
 (defun find-topics (query &optional option)
   "find topic from database."
   (let* ((qy (if query
                  (apply #'kv (loop for (k v) in query
                                 collect (kv k v)))
-                 :all) )
-         (docs (docs (apply #'db.find
-                            *topic-col*
-                            qy
-                            option)) ))
+                 :all))
+         (docs (docs (apply #'db.find *topic-col* qy option))))
     (values docs
             (doc-count *topic-col* :sel qy))))
 
 (defun find-sort-topics (query field asc &key (skip 0) (limit 0))
   "sort topic from database."
-  (let* ((qy (if query
-                 (apply #'kv (loop for (k v) in query
-                                collect (kv k v)))
-                 :all) )
-         (docs (docs (db.sort *topic-col* qy
-                             :field field :asc asc
-                             :skip skip :limit limit ))))
-    (values docs
-            (doc-count *topic-col* :sel qy))))
+  (let ((cl-mongo::*mongo-registry* nil))
+    (cl-mongo:with-mongo-connection (:db "node-club")
+      (let* ((qy (if query
+                     (apply #'kv (loop for (k v) in query
+                                    collect (kv k v)))
+                     :all))
+             (docs (docs (db.sort *topic-col* qy
+                                  :field field :asc asc
+                                  :skip skip :limit limit))
+               ))
+        (values docs
+                0 ;; (doc-count *topic-col* :sel qy)
+                ))))
+  
+  )
 
 (defun find-topic-by-id (id)
   (let ((oid (make-bson-oid :oid (oid id))))
@@ -146,6 +149,7 @@
                 ($ "content" content)
                 ($ "insertTime" date))))
 
+;; Find
 (defun find-replys (query &optional option)
   "find reply from database."
   (let* ((qy (if query

@@ -1,5 +1,5 @@
 (in-package :lisp2cnodejs.view)
-(load "shared")
+(my-load "shared")
 
 (defun login-main-content ()
   `(div (:id "content")
@@ -36,10 +36,6 @@
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
-
-;; (defun login-js
-;;   (ps))
-
 
 (defmacro login-page-mac ()
   `(html-template

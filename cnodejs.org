@@ -161,6 +161,8 @@
 
 ;; 
 ;; Routing rules
+(interpol:enable-interpol-syntax)
+(cl-syntax:use-syntax :interpol)  
 
 #+END_SRC
 
@@ -181,22 +183,27 @@
 ;; (defroute "/" ()
 ;;   (lisp-render "index" `(:user ,(gethash :user *session*))))
 
-(defroute "/"  (&key (|tab| "all") (|page| "1"))
-  (let* ((int (parse-integer |page|))
-        (page (if (> int 0) int 1))
-        (count 10))
+(defroute "/" (&key (|tab| "all") (|page| "1"))
+  (let* ((int (or (parse-integer |page|) 1))
+         (page (if (> int 0) int 1))
+         (count 10))
     (multiple-value-bind (topics allcount)
         (find-sort-topics (if (string/= |tab| "all") `(("tab" ,|tab|)))
-                         "insertTime"
-                         t
-                         :skip (* (- page 1) count)
-                         :limit count)
+                          "insertTime"
+                          nil
+                          :skip (* (- page 1) count)
+                          :limit count)
       ;; (format nil "tab=~a page=~a pc=~a" |tab| page allcount )
-      (lisp-render "index" `(:user ,(gethash :user *session*)
-                                   :topics ,(topic-docs->hts topics)
-                                   :tab ,|tab|
-                                   :page ,page
-                                   :pcount ,(ceiling (/ allcount count)))))))
+      (lisp-render "index" `(:title ,(concat "首页 欢迎您"
+                                             (or (gethash :user *session*)
+                                                 ""))
+                                    :user ,(gethash :user *session*)
+                                    :topics ,(topic-docs->hts topics)
+                                    :tab ,|tab|
+                                    :page ,page
+                                    :pcount ,(ceiling (/ (or allcount 0)
+                                                         count)))))))
+
 
 #+END_SRC
 ** /logout
@@ -277,15 +284,16 @@
   (setf (response-status *response*) 422)
   (lisp-render "register" `(:error ,msg)))
 #+END_SRC
-** Topic-create : /topic/create
-*** GET
+** Topic
+*** Create : /topic/create
+**** GET
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; GET /topic/create
 (defroute "/topic/create" ()
   (lisp-render "topic-create" `(:user ,(gethash :user *session*))))
 #+END_SRC
 
-*** POST
+**** POST
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; POST /topic/create
 (defroute ("/topic/create" :method :POST) (&key |title| |content| |tab|)
@@ -299,18 +307,17 @@
                (list title content tab))
          (setf (response-status *response*) 422)
          (lisp-render "topic-create" '(:error "信息不完整!"
-                                        :user uname)))
-        (t
-         (add-topic uname
-                    tab
-                    title
-                    content
-                    (get-universal-time))
-         (lisp-render "topic-create" '(:success "话题发表成功!"
-                                        :user uname)))))))
+                                       :user uname)))
+        (t (add-topic uname
+                      tab
+                      title
+                      content
+                      (get-universal-time))
+           (lisp-render "topic-create" '(:success "话题发表成功!"
+                                         :user uname)))))))
 
 #+END_SRC
-** Topic-detail : /topic/:tid
+*** Detail : /topic/:tid
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; GET /topic/:tid
 (defroute "/topic/:tid" (&key (tid ""))
@@ -326,7 +333,8 @@
                            :count ,count :replys ,(reply-docs->hts replys)))))) 
 #+END_SRC
 
-** Reply-add : /reply/add
+** Reply
+*** Add : /reply/add
 #+BEGIN_SRC lisp :tangle src/web.lisp
 ;; POST /reply/add
 (defroute ("/reply/add" :method :POST) (&key (|tid| "") (|content| ""))
@@ -342,7 +350,6 @@
                     (get-universal-time))
          (redirect (concat "/topic/" |tid|))))))
 #+END_SRC
-
 
 * View
 ** COMMENT Code Template
@@ -505,27 +512,25 @@
 (defun human-date (date)
   (and date
        (multiple-value-bind
-             (second minute hour date month year)
+             (second minute hour day month year)
            (decode-universal-time date)
          (format nil "~4D.~2,'0D.~2,'0D ~2,'0D:~2,'0D:~2,'0D"
-                 year
-                 month
-                 date
-                 hour
-                 minute
-                 second))))
+                 year month day hour minute second))))
 #+END_SRC
 
 ** ---
 ** Index
 #+BEGIN_SRC lisp :tangle templates/index.lisp
 (in-package :lisp2cnodejs.view)
-(load "shared")
+(my-load "shared")
 
 (defparameter *topics* (getf *args* :topics))
 
 (defun to-n (d &optional (n 0)) (if (< d n) n d))
-
+#+END_SRC
+ 
+*** Topic-list
+#+BEGIN_SRC lisp :tangle templates/index.lisp 
 (defun topic-list ()
   (loop for i in *topics*
      collect
@@ -540,7 +545,9 @@
                              :href ,(format nil "/topic/~A"
                                             (gethash "id" i)))
                      ,(gethash "title" i))))))
-
+#+END_SRC
+*** Content
+#+BEGIN_SRC lisp :tangle templates/index.lisp
 (defun index-main-content ()
   `(div (:id "content")
         ,(bs-panel
@@ -605,7 +612,10 @@
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
+#+END_SRC
 
+*** Page
+#+BEGIN_SRC lisp :tangle templates/index.lisp
 (defmacro index-page-mac ()
   `(html-template
     (layout-template)
@@ -625,13 +635,16 @@
 
 (defun index-page ()
   (index-page-mac))
-  #+END_SRC
- 
+#+END_SRC
+
 ** Login
 #+BEGIN_SRC lisp :tangle templates/login.lisp
 (in-package :lisp2cnodejs.view)
-(load "shared")
+(my-load "shared")
+#+END_SRC
 
+*** Content
+#+BEGIN_SRC lisp :tangle templates/login.lisp
 (defun login-main-content ()
   `(div (:id "content")
         ,(bs-panel
@@ -667,11 +680,9 @@
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
-
-;; (defun login-js
-;;   (ps))
-
-
+#+END_SRC
+*** Page
+#+BEGIN_SRC lisp :tangle templates/login.lisp
 (defmacro login-page-mac ()
   `(html-template
     (layout-template)
@@ -691,13 +702,14 @@
 
 (defun login-page ()
   (login-page-mac))
-
 #+END_SRC
 ** Register
 #+BEGIN_SRC lisp :tangle templates/register.lisp
 (in-package :lisp2cnodejs.view)
-(load "shared")
-
+(my-load "shared")
+#+END_SRC
+*** Content
+#+BEGIN_SRC lisp :tangle templates/register.lisp
 (defun register-main-content ()
   `(div (:id "content")
         ,(bs-panel
@@ -739,8 +751,9 @@
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
-
-
+#+END_SRC
+*** Page
+#+BEGIN_SRC lisp :tangle templates/register.lisp
 (defmacro register-page-mac ()
   `(html-template
     (layout-template)
@@ -766,11 +779,14 @@
 *** Create
 #+BEGIN_SRC lisp :tangle templates/topic-create.lisp
 (in-package :lisp2cnodejs.view)
+(my-load "shared")
+
 (interpol:enable-interpol-syntax)
 (cl-syntax:use-syntax :interpol)  
+#+END_SRC
 
-(load "shared")
-
+**** Create-panel
+#+BEGIN_SRC lisp :tangle templates/topic-create.lisp
 (defun create-panel (action board-data)
   `(form (:action ,action :method "post"
                   :class "form-horizontal"
@@ -781,7 +797,7 @@
                 ,@(loop for i in board-data
                      and c = 1 then (1+ c)
                      collect
-                       `(option (:value ,#?"tab${c}") ,i))))
+                       `(option (:value ,(concat "tab" c)) ,i))))
          
          (div (:class "form-group")
               (input (:name "title" :type "text"
@@ -803,6 +819,9 @@
                        :type "submit"
                        :style "primary"))))
 
+#+END_SRC
+**** Content
+#+BEGIN_SRC lisp :tangle templates/topic-create.lisp
 (defun create-main-content ()
   `(div (:id "content")
         ,(bs-panel
@@ -832,7 +851,9 @@
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
-
+#+END_SRC
+**** Page
+#+BEGIN_SRC lisp :tangle templates/topic-create.lisp
 (defmacro topic-create-page-mac ()
   `(html-template
     (layout-template)
@@ -857,12 +878,17 @@
 (defun topic-create-page ()
   (topic-create-page-mac))
   #+END_SRC
+
 *** Detail
 #+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
 (in-package :lisp2cnodejs.view)
-(load "shared")
+(my-load "shared")
 
 (defparameter *topic* (getf *args* :topic))
+#+END_SRC
+
+**** Reply
+#+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
 (defparameter *replys* (getf *args* :replys))
 
 (defun reply-add-form (action)
@@ -911,6 +937,10 @@
                               ;; ? markdown
                               ,(markdown:parse (gethash "content" reply)))))))))
 
+#+END_SRC
+
+**** Content
+#+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
 (defun detail-main-content ()
   `(div (:id "content")
         ,(bs-panel
@@ -941,7 +971,9 @@
             (3 (,(main-sidebar))))
           :w '("md")))
       :fluid t)))
-
+#+END_SRC
+**** Page
+#+BEGIN_SRC lisp :tangle templates/topic-detail.lisp
 (defmacro topic-detail-page-mac ()
   `(html-template
     (layout-template)
@@ -966,7 +998,6 @@
 (defun topic-detail-page ()
   (topic-detail-page-mac))
   #+END_SRC
-  
   
 * Model
 ** COMMENT PostgreSQL
@@ -1046,7 +1077,8 @@
   (:use :cl :cl-mongo :cl-mongo-id)
   (:import-from :cl-mongo
                 :make-bson-oid)
-  (:export :find-user
+  (:export :doc-count
+           :find-user
            :add-user
            :auth-user
            :add-topic
@@ -1064,7 +1096,8 @@
 *** Database
 #+BEGIN_SRC lisp :tangle src/model.lisp
 ;; Database
-(db.use "node-club")
+(defparameter *my-database* "node-club")
+(db.use *my-database*)
 #+END_SRC
 *** Count
 #+BEGIN_SRC lisp :tangle src/model.lisp
@@ -1081,24 +1114,18 @@
 
 **** Add
 #+BEGIN_SRC lisp :tangle src/model.lisp
-
-#+END_SRC
-
-**** Find
-#+BEGIN_SRC lisp :tangle src/model.lisp
-
-#+END_SRC
-
-**** Auth
-#+BEGIN_SRC lisp :tangle src/model.lisp
-;; User
+;; Add
 (defun add-user (uname pwd email)
   "add user to database."
   (db.insert *user-col* ($ ($ "username" uname)
                            ($ "password" ;; (cl-pass:hash pwd)
                               pwd)
                            ($ "email" email))))
+#+END_SRC
 
+**** Find
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; Find
 (defun find-username (uname)
   "lookup user by username."
   (docs (db.find *user-col* ($ "username" uname))))
@@ -1114,7 +1141,11 @@
   (docs (db.find *user-col* (kv "$or"
                                 (list ($ "username" uname)
                                       ($ "email" email))))))
+#+END_SRC
 
+**** Auth
+#+BEGIN_SRC lisp :tangle src/model.lisp
+;; Auth
 (defun auth-user (uname pwd)
   ;; (db.find *user-col* ($ ($ :username uname)
   ;;                   ($ :password pwd)))
@@ -1125,7 +1156,6 @@
          (string= pwd pwd-hash)
          uname)
         (values nil nil))))
-
 #+END_SRC
 
 *** Topic Collection
@@ -1141,7 +1171,7 @@
   (let (hts)
     (loop for i in docs
        do (let ((ht (make-hash-table :test 'equal)))
-            (setf (gethash "id" ht)  (oid-str (doc-id i)))
+            (setf (gethash "id" ht) (oid-str (doc-id i)))
             (setf (gethash "title" ht) (get-element "title" i))
             (setf (gethash "content" ht) (get-element "content" i))
             (setf (gethash "tab" ht) (get-element "tab" i))
@@ -1158,44 +1188,44 @@
 (defun add-topic (uname tab title content date)
   "add topic to database."
   (db.insert *topic-col* ($ ($ "title" title)
-                           ($ "content" content)
-                           ($ "tab" tab)
-                           ($ "username" uname)
-                           ($ "insertTime" date))))
+                            ($ "content" content)
+                            ($ "tab" tab)
+                            ($ "username" uname)
+                            ($ "insertTime" date))))
 #+END_SRC
 
 **** Find
 #+BEGIN_SRC lisp :tangle src/model.lisp
+;; Find
 (defun find-topics (query &optional option)
   "find topic from database."
   (let* ((qy (if query
                  (apply #'kv (loop for (k v) in query
                                 collect (kv k v)))
-                 :all) )
-         (docs (docs (apply #'db.find
-                            ,*topic-col*
-                            qy
-                            option)) ))
+                 :all))
+         (docs (docs (apply #'db.find *topic-col* qy option))))
     (values docs
             (doc-count *topic-col* :sel qy))))
 
 (defun find-sort-topics (query field asc &key (skip 0) (limit 0))
   "sort topic from database."
-  (let* ((qy (if query
-                 (apply #'kv (loop for (k v) in query
-                                collect (kv k v)))
-                 :all) )
-         (docs (docs (db.sort *topic-col* qy
-                             :field field :asc asc
-                             :skip skip :limit limit ))))
-    (values docs
-            (doc-count *topic-col* :sel qy))))
+  (let ((cl-mongo::*mongo-registry* nil))
+    (cl-mongo:with-mongo-connection (:db *my-database*)
+      (let* ((qy (if query
+                     (apply #'kv (loop for (k v) in query
+                                    collect (kv k v)))
+                     :all))
+             (docs (docs (db.sort *topic-col* qy
+                                  :field field :asc asc
+                                  :skip skip :limit limit))))
+        (values docs
+                (doc-count *topic-col* :sel qy)))))
+  
+  )
 
 (defun find-topic-by-id (id)
   (let ((oid (make-bson-oid :oid (oid id))))
     (docs (db.find *topic-col* (kv "_id" oid)))))
-
-
 #+END_SRC
 
 *** Reply Collection
@@ -1235,6 +1265,7 @@
 
 **** Find
 #+BEGIN_SRC lisp :tangle src/model.lisp
+;; Find
 (defun find-replys (query &optional option)
   "find reply from database."
   (let* ((qy (if query

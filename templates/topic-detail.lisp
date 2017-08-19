@@ -1,7 +1,8 @@
 (in-package :lisp2cnodejs.view)
-(load "shared")
+(my-load "shared")
 
 (defparameter *topic* (getf *args* :topic))
+
 (defparameter *replys* (getf *args* :replys))
 
 (defun reply-add-form (action)

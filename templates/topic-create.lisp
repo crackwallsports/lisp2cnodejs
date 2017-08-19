@@ -1,8 +1,8 @@
 (in-package :lisp2cnodejs.view)
-(interpol:enable-interpol-syntax)
-(cl-syntax:use-syntax :interpol)  
+(my-load "shared")
 
-(load "shared")
+(interpol:enable-interpol-syntax)
+(cl-syntax:use-syntax :interpol)
 
 (defun create-panel (action board-data)
   `(form (:action ,action :method "post"
@@ -14,7 +14,7 @@
                 ,@(loop for i in board-data
                      and c = 1 then (1+ c)
                      collect
-                       `(option (:value ,#?"tab${c}") ,i))))
+                       `(option (:value ,(concat "tab" c)) ,i))))
          
          (div (:class "form-group")
               (input (:name "title" :type "text"
